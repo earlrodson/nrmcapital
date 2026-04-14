@@ -5,6 +5,8 @@ import { z } from "zod"
 
 import { prisma } from "@repo/db"
 
+type AppRole = "SUPERADMIN" | "ADMIN"
+
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -46,14 +48,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.role = (user as { role?: string }).role
+        token.role = (user as { role?: AppRole }).role
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string
-        session.user.role = token.role as "SUPERADMIN" | "ADMIN"
+        session.user.role = (token.role ?? "ADMIN") as AppRole
       }
       return session
     },
