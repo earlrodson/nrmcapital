@@ -80,9 +80,9 @@ export function LoanEstimator() {
   }, [principal, term, selectedFrequency.termsPerMonth])
 
   return (
-    <section className="mb-16 w-full max-w-md rounded-[2rem] border border-slate-100 bg-white p-6 shadow-2xl md:p-8">
-      <h3 className="mb-2 text-center text-lg font-bold text-slate-800">INSTANT PAYMENT ESTIMATOR</h3>
-      <p className="mb-6 text-center text-xs text-slate-500">
+    <section className="glass-panel mb-14 w-full max-w-md rounded-[2rem] p-5 shadow-xl sm:mb-16 sm:p-6 md:p-8">
+      <h3 className="mb-2 text-center text-lg font-bold tracking-tight text-slate-800 sm:text-xl">INSTANT PAYMENT ESTIMATOR</h3>
+      <p className="mb-6 text-center text-sm leading-relaxed text-slate-600">
         Monthly rates are auto-assigned by selected term using NRM&apos;s approved tier matrix (1-17 months only).
       </p>
 
@@ -91,7 +91,7 @@ export function LoanEstimator() {
           <label htmlFor="amount-slider" className="text-sm font-semibold uppercase text-slate-600">
             Loan Amount
           </label>
-          <span className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-1 text-xl font-bold">
+          <span className="glass-panel-strong rounded-xl px-4 py-1 text-lg font-bold text-slate-800 sm:text-xl">
             {formatCurrency(principal).replace(".00", "")}
           </span>
         </div>
@@ -103,7 +103,7 @@ export function LoanEstimator() {
           step={STEP_AMOUNT}
           value={principal}
           onChange={(event) => setPrincipal(Number(event.target.value))}
-          className="loan-range mb-2 w-full"
+          className="loan-range mb-3 w-full"
           aria-label="Loan amount slider"
         />
         <div className="flex justify-between text-xs font-medium text-slate-500">
@@ -117,7 +117,7 @@ export function LoanEstimator() {
           <p className="text-sm font-semibold uppercase text-slate-600">Loan Term</p>
           <p className="text-sm text-slate-500">{term} month{term === 1 ? "" : "s"}</p>
         </div>
-        <div className="rounded-xl bg-slate-100 p-3">
+        <div className="glass-panel-strong rounded-xl p-3 sm:p-4">
           <div className="mb-3 flex items-center gap-3">
             <input
               id="term-slider"
@@ -127,7 +127,7 @@ export function LoanEstimator() {
               step={1}
               value={term}
               onChange={(event) => setTerm(clampTerm(Number(event.target.value)))}
-              className="w-full accent-emerald-600"
+              className="loan-range w-full accent-emerald-600"
               aria-label="Loan term in months"
             />
             <input
@@ -136,7 +136,7 @@ export function LoanEstimator() {
               max={MAX_TERM}
               value={term}
               onChange={(event) => setTerm(clampTerm(Number(event.target.value)))}
-              className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-sm font-semibold text-slate-700"
+              className="w-20 rounded-lg border border-slate-300 bg-white/95 px-2 py-1.5 text-right text-sm font-semibold text-slate-700"
               aria-label="Loan term number input"
             />
           </div>
@@ -144,7 +144,7 @@ export function LoanEstimator() {
             <span>{MIN_TERM} month</span>
             <span>{MAX_TERM} months</span>
           </div>
-          <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/85 px-3 py-2 text-sm text-emerald-800">
             <p className="font-semibold">{estimate.rateTier.label}</p>
             <p>Applicable range: {estimate.rateTier.rangeLabel}</p>
           </div>
@@ -156,7 +156,7 @@ export function LoanEstimator() {
           <p className="text-sm font-semibold uppercase text-slate-600">Payment Frequency</p>
           <p className="text-sm text-slate-500">installments</p>
         </div>
-        <div className="flex gap-1 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Payment frequency options">
+        <div className="glass-panel-strong flex gap-1 rounded-xl p-1.5" role="radiogroup" aria-label="Payment frequency options">
           {PAYMENT_FREQUENCIES.map((item) => {
             const active = item.value === frequency
             return (
@@ -166,8 +166,8 @@ export function LoanEstimator() {
                 role="radio"
                 aria-checked={active}
                 onClick={() => setFrequency(item.value)}
-                className={`flex-1 rounded-lg px-2 py-2 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
-                  active ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500"
+                className={`swift-transition min-h-11 flex-1 rounded-lg px-2 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 active:scale-[0.99] ${
+                  active ? "bg-white text-emerald-600 shadow-sm" : "text-slate-600"
                 }`}
               >
                 {item.label}
@@ -177,30 +177,30 @@ export function LoanEstimator() {
         </div>
       </div>
 
-      <div className="mb-6 flex items-center justify-between border-t border-slate-100 pt-4">
+      <div className="mb-6 flex items-center justify-between border-t border-slate-200 pt-4">
         <div>
-          <p className="text-sm font-semibold text-slate-600">MONTHLY INTEREST RATE</p>
+          <p className="text-sm font-semibold text-slate-700">MONTHLY INTEREST RATE</p>
           <p className="text-xs text-slate-500">{estimate.rateTier.rangeLabel}</p>
         </div>
-        <p className="font-bold text-slate-800">{estimate.monthlyRate.toFixed(2)}%</p>
+        <p className="text-xl font-bold text-slate-800">{estimate.monthlyRate.toFixed(2)}%</p>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-slate-100 bg-slate-50 p-6 text-center">
+      <div className="glass-panel-strong mb-6 rounded-2xl p-5 text-center sm:p-6">
         <p className="mb-2 text-sm font-bold text-slate-800">ESTIMATED {selectedFrequency.label.toUpperCase()} PAYMENT:</p>
-        <p className="text-5xl font-extrabold tracking-tight text-emerald-600">{formatCurrency(estimate.installmentAmount)}</p>
-        <p className="mt-3 text-[10px] text-slate-400">Estimated for {estimate.totalTerms} total installments.</p>
+        <p className="text-4xl font-extrabold tracking-tight text-emerald-600 sm:text-5xl">{formatCurrency(estimate.installmentAmount)}</p>
+        <p className="mt-3 text-xs text-slate-500">Estimated for {estimate.totalTerms} total installments.</p>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 text-left text-xs">
-        <div className="rounded-lg border border-slate-100 bg-white p-3">
+      <div className="mb-6 grid grid-cols-1 gap-3 text-left text-sm sm:grid-cols-2">
+        <div className="glass-panel-strong rounded-lg p-3">
           <p className="text-slate-500">Est. interest per month</p>
           <p className="font-semibold text-slate-800">{formatCurrency(estimate.estimatedInterest)}</p>
         </div>
-        <div className="rounded-lg border border-slate-100 bg-white p-3">
+        <div className="glass-panel-strong rounded-lg p-3">
           <p className="text-slate-500">Total interest</p>
           <p className="font-semibold text-slate-800">{formatCurrency(estimate.totalInterest)}</p>
         </div>
-        <div className="col-span-2 rounded-lg border border-slate-100 bg-white p-3">
+        <div className="glass-panel-strong rounded-lg p-3 sm:col-span-2">
           <p className="text-slate-500">Total payable amount</p>
           <p className="font-semibold text-slate-800">{formatCurrency(estimate.totalPayable)}</p>
         </div>
@@ -208,11 +208,11 @@ export function LoanEstimator() {
 
       <Link
         href="/login"
-        className="inline-flex w-full items-center justify-center rounded-full bg-emerald-600 py-4 text-lg font-bold text-white shadow-lg shadow-emerald-600/30 transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        className="swift-transition inline-flex min-h-11 w-full items-center justify-center rounded-full bg-emerald-600 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:scale-[0.99] sm:text-lg"
       >
         START YOUR APPLICATION
       </Link>
-      <p className="mt-3 text-center text-[11px] text-slate-400">
+      <p className="mt-3 text-center text-xs leading-relaxed text-slate-500 sm:text-sm">
         Estimates are for reference only. Terms above 17 months are not allowed; final approval and release remain subject to NRM credit evaluation.
       </p>
     </section>

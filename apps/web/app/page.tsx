@@ -8,12 +8,12 @@ import { TestimonialsSection } from "@/components/landing/testimonials-section"
 
 export default function HomePage() {
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-slate-50 text-slate-800">
-      <main className="mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-12">
-        <div className="mb-6 flex w-full justify-end">
+    <div className="safe-area-top safe-area-bottom relative min-h-svh overflow-x-hidden bg-linear-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-800">
+      <main className="mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-8 sm:px-6 sm:py-10 md:py-12 lg:px-8 lg:py-14">
+        <div className="mb-5 flex w-full justify-end sm:mb-6">
           <Link
             href="/login"
-            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-500 hover:text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+            className="swift-transition glass-panel rounded-full px-4 py-2 text-sm font-semibold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:scale-[0.99]"
           >
             Login
           </Link>

@@ -4,25 +4,32 @@ import { Sparkles } from "lucide-react"
 
 export function HeroSection() {
   return (
-    <section className="relative mb-12 w-full text-center">
-      <Sparkles className="absolute left-4 top-4 hidden h-10 w-10 text-emerald-400/60 md:block" />
-      <Sparkles className="absolute right-4 top-40 hidden h-8 w-8 text-emerald-400/60 md:block" />
+    <section className="relative mb-12 w-full text-center sm:mb-14 lg:mb-16">
+      <Sparkles className="absolute left-1 top-4 hidden h-8 w-8 text-emerald-400/50 sm:block md:left-4 md:h-10 md:w-10 md:text-emerald-400/60" />
+      <Sparkles className="absolute right-1 top-36 hidden h-6 w-6 text-emerald-400/45 md:block md:right-4 md:top-40 md:h-8 md:w-8 md:text-emerald-400/60" />
 
-      <div className="mb-8 flex justify-center">
-        <Image src="/images/nrm-capital-logo.png" alt="NRM Capital" width={200} height={200} priority className="h-auto w-full max-w-[200px]" />
+      <div className="mb-7 flex justify-center sm:mb-8">
+        <Image
+          src="/images/nrm-capital-logo.png"
+          alt="NRM Capital"
+          width={200}
+          height={200}
+          priority
+          className="h-auto w-full max-w-[180px] sm:max-w-[200px] md:max-w-[220px]"
+        />
       </div>
 
-      <h2 className="mx-auto mb-4 max-w-3xl text-3xl font-extrabold leading-tight text-slate-900 md:text-5xl">
+      <h2 className="mx-auto mb-4 max-w-3xl text-3xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-4xl md:text-5xl lg:text-6xl">
         Practical financing solutions for Filipino individuals and growing businesses.
       </h2>
-      <p className="mb-8 text-lg text-slate-600">
+      <p className="mx-auto mb-8 max-w-3xl text-base leading-relaxed text-slate-600 sm:text-lg">
         NRM Capital provides transparent lending terms, responsive processing, and professional client support across the
         Philippines.
       </p>
 
       <Link
         href="/login"
-        className="inline-flex rounded-full bg-emerald-600 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-600/30 transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        className="swift-transition inline-flex min-h-11 items-center rounded-full bg-emerald-600 px-7 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:scale-[0.99] sm:px-8 sm:text-base"
       >
         CHECK YOUR ELIGIBILITY
       </Link>

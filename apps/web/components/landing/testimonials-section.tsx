@@ -7,10 +7,10 @@ const testimonials = [
 export function TestimonialsSection() {
   return (
     <section className="w-full max-w-4xl">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
         {testimonials.map((quote) => (
-          <article key={quote} className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
-            <p className="mb-2 text-sm text-slate-600">{`"${quote}"`}</p>
+          <article key={quote} className="glass-panel flex h-full flex-col justify-between rounded-2xl p-5 sm:p-6">
+            <p className="mb-3 text-sm leading-relaxed text-slate-600">{`"${quote}"`}</p>
             <p className="text-sm text-yellow-500">★★★★★</p>
           </article>
         ))}

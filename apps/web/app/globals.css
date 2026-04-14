@@ -38,6 +38,14 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.705 0.015 286.067);
+  --glass: oklch(1 0 0 / 72%);
+  --glass-strong: oklch(1 0 0 / 88%);
+  --glass-border: oklch(1 0 0 / 70%);
+  --shadow-glass: 0 10px 30px rgb(15 23 42 / 12%), inset 0 1px 0 rgb(255 255 255 / 35%);
+  --glass-blur: 16px;
+  --glass-saturate: 1.2;
+  --ease-swift: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-swift: 180ms;
 }
 
 a {
@@ -126,6 +134,9 @@ a {
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-border: var(--glass-border);
 }
 
 .dark {
@@ -160,6 +171,10 @@ a {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.552 0.016 285.938);
+  --glass: oklch(0.21 0.006 285.885 / 65%);
+  --glass-strong: oklch(0.274 0.006 286.033 / 82%);
+  --glass-border: oklch(1 0 0 / 24%);
+  --shadow-glass: 0 12px 32px rgb(2 6 23 / 35%), inset 0 1px 0 rgb(255 255 255 / 20%);
 }
 
 @layer base {
@@ -171,5 +186,40 @@ a {
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-panel-strong {
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+  }
+
+  @supports ((-webkit-backdrop-filter: blur(0)) or (backdrop-filter: blur(0))) {
+    .glass-panel,
+    .glass-panel-strong {
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+  }
+
+  .swift-transition {
+    transition-duration: var(--duration-swift);
+    transition-timing-function: var(--ease-swift);
+  }
+
+  .safe-area-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  .safe-area-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
