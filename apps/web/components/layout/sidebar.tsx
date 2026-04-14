@@ -11,14 +11,14 @@ const links = [
 
 export function Sidebar() {
   return (
-    <aside className="min-h-screen w-64 border-r border-slate-200 bg-white p-4">
+    <aside className="min-h-screen w-64 border-r border-sidebar-border bg-sidebar p-4 text-sidebar-foreground">
       <p className="mb-6 text-lg font-semibold">NRM Lending</p>
       <nav className="space-y-2">
         {links.map((link) => (
           <Link
             key={link.href}
             href={link.href}
-            className="block rounded px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+            className="block rounded px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
             {link.label}
           </Link>
