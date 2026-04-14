@@ -1,14 +1,16 @@
-import Credentials from "next-auth/providers/credentials"
-import NextAuth from "next-auth"
-import { compare } from "bcryptjs"
-import { z } from "zod"
+import Credentials from "next-auth/providers/credentials";
+import NextAuth from "next-auth";
+import { compare } from "bcryptjs";
+import { z } from "zod";
 
-import { prisma } from "@repo/db"
+import { User, prisma } from "@repo/db";
+
+type AppRole = "SUPERADMIN" | "ADMIN";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-})
+});
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
@@ -21,43 +23,47 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(rawCredentials) {
-        const parsed = credentialsSchema.safeParse(rawCredentials)
-        if (!parsed.success) return null
+        const parsed = credentialsSchema.safeParse(rawCredentials);
+        if (!parsed.success) return null;
 
-        const user = await prisma.user.findUnique({
+        const user: User | null = await prisma.user.findUnique({
           where: { email: parsed.data.email },
-        })
+        });
 
-        if (!user?.is_active) return null
+        if (!user?.is_active) return null;
 
-        const passwordMatches = await compare(parsed.data.password, user.password_hash)
-        if (!passwordMatches) return null
+        const passwordMatches = await compare(
+          parsed.data.password,
+          user.password_hash,
+        );
+        if (!passwordMatches) return null;
 
         return {
           id: user.id,
           email: user.email,
-          name: user.name,
+          first_name: user.first_name,
+          last_name: user.last_name,
           role: user.role,
-        }
+        };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id
-        token.role = (user as { role?: string }).role
+        token.id = user.id;
+        token.role = (user as { role?: AppRole }).role;
       }
-      return token
+      return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string
-        session.user.role = token.role as "SUPERADMIN" | "ADMIN"
+        session.user.id = token.id as string;
+        session.user.role = (token.role ?? "ADMIN") as AppRole;
       }
-      return session
+      return session;
     },
   },
-})
+});
 
-export const { GET, POST } = handlers
+export const { GET, POST } = handlers;
