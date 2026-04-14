@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { redirect } from "next/navigation"
+import { prisma } from "@/lib/db"
 
 import { Header } from "@/components/layout/header"
 import { Sidebar } from "@/components/layout/sidebar"
@@ -8,7 +9,16 @@ import { auth } from "@/lib/auth"
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await auth()
 
-  if (!session?.user) {
+  if (!session?.user?.id || !session.user.role) {
+    redirect("/login")
+  }
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { is_active: true, role: true },
+  })
+
+  if (!currentUser?.is_active || currentUser.role !== session.user.role) {
     redirect("/login")
   }
 

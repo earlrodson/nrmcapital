@@ -1,4 +1,3 @@
-import Link from "next/link"
 import Image from "next/image"
 import { Sparkles } from "lucide-react"
 
@@ -27,12 +26,6 @@ export function HeroSection() {
         Philippines.
       </p>
 
-      <Link
-        href="/login"
-        className="swift-transition inline-flex min-h-11 items-center rounded-full bg-emerald-600 px-7 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:scale-[0.99] sm:px-8 sm:text-base"
-      >
-        CHECK YOUR ELIGIBILITY
-      </Link>
     </section>
   )
 }

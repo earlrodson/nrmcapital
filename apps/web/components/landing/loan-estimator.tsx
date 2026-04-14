@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { useMemo, useState } from "react"
 
 const MIN_AMOUNT = 5000
@@ -206,12 +205,6 @@ export function LoanEstimator() {
         </div>
       </div>
 
-      <Link
-        href="/login"
-        className="swift-transition inline-flex min-h-11 w-full items-center justify-center rounded-full bg-emerald-600 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:scale-[0.99] sm:text-lg"
-      >
-        START YOUR APPLICATION
-      </Link>
       <p className="mt-3 text-center text-xs leading-relaxed text-slate-500 sm:text-sm">
         Estimates are for reference only. Terms above 17 months are not allowed; final approval and release remain subject to NRM credit evaluation.
       </p>

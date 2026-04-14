@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 export function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState("admin@nrm.local")
   const [password, setPassword] = useState("admin123")
   const [error, setError] = useState("")
@@ -29,7 +30,8 @@ export function LoginForm() {
       return
     }
 
-    router.push("/dashboard")
+    const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
+    router.push(callbackUrl)
     router.refresh()
   }
 
