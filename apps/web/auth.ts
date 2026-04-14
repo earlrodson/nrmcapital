@@ -7,6 +7,8 @@ import { User, prisma } from "@repo/db";
 
 type AppRole = "SUPERADMIN" | "ADMIN";
 
+type AppRole = "SUPERADMIN" | "ADMIN";
+
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
