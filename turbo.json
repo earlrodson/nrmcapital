@@ -5,6 +5,13 @@
       "dependsOn": [
         "^build"
       ],
+      "env": [
+        "DATABASE_URL",
+        "DIRECT_URL",
+        "AUTH_SECRET",
+        "AUTH_URL",
+        "NEXTAUTH_URL"
+      ],
       "outputs": [
         ".next/**",
         "dist/**"
