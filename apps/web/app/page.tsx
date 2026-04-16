@@ -4,7 +4,7 @@ import { FeaturesSection } from "@/components/landing/features-section"
 import { HeroSection } from "@/components/landing/hero-section"
 import { LandingFooter } from "@/components/landing/landing-footer"
 import { LoanEstimator } from "@/components/landing/loan-estimator"
-import { TestimonialsSection } from "@/components/landing/testimonials-section"
+import { PoliciesSection } from "@/components/landing/policies-section"
 
 export default function HomePage() {
   return (
@@ -21,7 +21,7 @@ export default function HomePage() {
         <HeroSection />
         <LoanEstimator />
         <FeaturesSection />
-        <TestimonialsSection />
+        <PoliciesSection />
       </main>
       <LandingFooter />
     </div>

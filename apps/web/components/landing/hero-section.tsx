@@ -19,11 +19,10 @@ export function HeroSection() {
       </div>
 
       <h2 className="mx-auto mb-4 max-w-3xl text-3xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-4xl md:text-5xl lg:text-6xl">
-        Practical financing solutions for Filipino individuals and growing businesses.
+        NRM Capital provides flexible, transparent, and responsible lending solutions — from personal loans to business financing tailored to your needs.
       </h2>
       <p className="mx-auto mb-8 max-w-3xl text-base leading-relaxed text-slate-600 sm:text-lg">
-        NRM Capital provides transparent lending terms, responsive processing, and professional client support across the
-        Philippines.
+        no hidden fees
       </p>
     </section>
   )

@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react"
 
-const MIN_AMOUNT = 5000
-const MAX_AMOUNT = 500000
-const STEP_AMOUNT = 5000
+const MIN_AMOUNT = 1000
+const MAX_AMOUNT = 100000
+const STEP_AMOUNT = 1000
 const MIN_TERM = 1
 const MAX_TERM = 17
 const PAYMENT_FREQUENCIES = [
@@ -52,7 +52,7 @@ function formatCurrency(value: number) {
 }
 
 export function LoanEstimator() {
-  const [principal, setPrincipal] = useState(50000)
+  const [principal, setPrincipal] = useState(20000)
   const [term, setTerm] = useState(6)
   const [frequency, setFrequency] = useState<Frequency>("SEMI_MONTHLY")
 
