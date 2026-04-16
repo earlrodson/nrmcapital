@@ -1,16 +1,33 @@
-import "./globals.css"
+import { Geist, Geist_Mono, Montserrat } from "next/font/google"
 
-import type { ReactNode } from "react"
-import { Montserrat } from "next/font/google";
-import { cn } from "@/lib/utils";
+import "@workspace/ui/globals.css"
+import { ThemeProvider } from "@/components/theme-provider"
+import { TooltipProvider } from "@workspace/ui/components/tooltip"
+import { cn } from "@workspace/ui/lib/utils";
 
-const montserrat = Montserrat({subsets:['latin'],variable:'--font-sans'});
+const montserrat = Montserrat({subsets:['latin'],variable:'--font-sans'})
 
+const fontMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+})
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
   return (
-    <html lang="en" className={cn("font-sans", montserrat.variable)}>
-      <body>{children}</body>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={cn("antialiased", fontMono.variable, "font-sans", montserrat.variable)}
+    >
+      <body>
+        <ThemeProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </ThemeProvider>
+      </body>
     </html>
   )
 }

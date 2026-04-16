@@ -8,7 +8,7 @@ import { TestimonialsSection } from "@/components/landing/testimonials-section"
 
 export default function HomePage() {
   return (
-    <div className="safe-area-top safe-area-bottom relative min-h-svh overflow-x-hidden bg-linear-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-800">
+    <div className="landing-glass-theme safe-area-top safe-area-bottom relative min-h-svh overflow-x-hidden bg-linear-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-800">
       <main className="mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-8 sm:px-6 sm:py-10 md:py-12 lg:px-8 lg:py-14">
         <div className="mb-5 flex w-full justify-end sm:mb-6">
           <Link

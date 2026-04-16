@@ -114,7 +114,10 @@ export function LoanEstimator() {
       <div className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-semibold uppercase text-slate-600">Loan Term</p>
-          <p className="text-sm text-slate-500">{term} month{term === 1 ? "" : "s"}</p>
+          <p className="text-sm text-slate-500">
+            {term} month
+            {term === 1 ? "" : "s"}
+          </p>
         </div>
         <div className="glass-panel-strong rounded-xl p-3 sm:p-4">
           <div className="mb-3 flex items-center gap-3">
@@ -206,7 +209,8 @@ export function LoanEstimator() {
       </div>
 
       <p className="mt-3 text-center text-xs leading-relaxed text-slate-500 sm:text-sm">
-        Estimates are for reference only. Terms above 17 months are not allowed; final approval and release remain subject to NRM credit evaluation.
+        Estimates are for reference only. Terms above 17 months are not allowed; final approval and release remain subject to NRM
+        credit evaluation.
       </p>
     </section>
   )

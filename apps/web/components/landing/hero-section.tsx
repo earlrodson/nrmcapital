@@ -25,7 +25,6 @@ export function HeroSection() {
         NRM Capital provides transparent lending terms, responsive processing, and professional client support across the
         Philippines.
       </p>
-
     </section>
   )
 }

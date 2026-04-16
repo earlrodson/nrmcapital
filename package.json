@@ -1,23 +1,24 @@
 {
-  "name": "nrm-lending",
+  "name": "nrmcapital",
+  "version": "0.0.1",
   "private": true,
-  "version": "0.1.0",
-  "packageManager": "pnpm@10.12.1",
   "scripts": {
-    "build": "turbo run build",
-    "build:vercel": "pnpm db:deploy && pnpm --filter web build",
-    "db:deploy": "[ -f .env ] && set -a && . ./.env && set +a; pnpm --filter @repo/db exec prisma migrate deploy",
-    "db:generate": "pnpm --filter @repo/db exec prisma generate",
-    "db:migrate": "[ -f .env ] && set -a && . ./.env && set +a; pnpm --filter @repo/db exec prisma migrate dev",
-    "db:seed": "[ -f .env ] && set -a && . ./.env && set +a; pnpm --filter @repo/db exec prisma db seed",
-    "db:studio": "[ -f .env ] && set -a && . ./.env && set +a; pnpm --filter @repo/db exec prisma studio",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "postinstall": "pnpm --filter @repo/db exec prisma generate",
-    "type-check": "turbo run type-check"
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "format": "turbo format",
+    "typecheck": "turbo typecheck"
   },
   "devDependencies": {
-    "turbo": "^2.5.3",
-    "typescript": "^5.8.3"
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "prettier": "^3.8.1",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "turbo": "^2.8.17",
+    "typescript": "5.9.3"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
   }
 }
