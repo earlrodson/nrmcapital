@@ -45,7 +45,7 @@ export function HeroSection({ calculator }: HeroSectionProps) {
 
             {/* Floating Bubble 1 */}
             <div
-              className="animate-float glass-panel absolute left-0 top-[10%] z-20 flex items-center gap-2 rounded-full border border-white/50 bg-white/70 px-4 py-2 shadow-lg backdrop-blur-md lg:-left-8"
+              className="animate-float glass-panel absolute left-0 top-[30%] z-20 flex items-center gap-2 rounded-full border border-white/50 bg-white/70 px-4 py-2 shadow-lg backdrop-blur-md lg:-left-8"
               style={{ animationDelay: '1s', animationDuration: '6s' }}
             >
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
@@ -56,7 +56,7 @@ export function HeroSection({ calculator }: HeroSectionProps) {
 
             {/* Floating Bubble 2 */}
             <div
-              className="animate-float glass-panel absolute bottom-[20%] right-0 z-20 flex items-center gap-2 rounded-full border border-white/50 bg-white/70 px-4 py-2 shadow-lg backdrop-blur-md lg:-right-4"
+              className="animate-float glass-panel absolute bottom-[30%] right-0 z-20 flex items-center gap-2 rounded-full border border-white/50 bg-white/70 px-4 py-2 shadow-lg backdrop-blur-md lg:-right-4"
               style={{ animationDelay: '2s', animationDuration: '8s' }}
             >
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
@@ -67,7 +67,7 @@ export function HeroSection({ calculator }: HeroSectionProps) {
 
             {/* Floating Bubble 3 */}
             <div
-              className="animate-float glass-panel absolute -left-4 top-[50%] z-20 flex items-center gap-2 rounded-full border border-white/50 bg-white/70 px-4 py-2 shadow-lg backdrop-blur-md lg:-left-12"
+              className="animate-float glass-panel absolute -left-4 top-[70%] z-20 flex items-center gap-2 rounded-full border border-white/50 bg-white/70 px-4 py-2 shadow-lg backdrop-blur-md lg:-left-12"
               style={{ animationDelay: '3s', animationDuration: '7s' }}
             >
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
