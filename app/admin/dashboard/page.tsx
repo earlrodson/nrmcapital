@@ -6,8 +6,11 @@ import {
   CardTitle 
 } from "@/components/ui/card"
 import { Users, Briefcase, CreditCard, AlertCircle } from "lucide-react"
+import { CONFIG } from "@/lib/config"
 
 export default function AdminDashboardPage() {
+  const { DEFAULT_SETTINGS, LABELS } = CONFIG
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -44,11 +47,11 @@ export default function AdminDashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Available Funding</CardTitle>
+            <CardTitle className="text-sm font-medium">{LABELS.AVAILABLE_FUNDING}</CardTitle>
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₱45,231.89</div>
+            <div className="text-2xl font-bold">{DEFAULT_SETTINGS.CURRENCY_SYMBOL}45,231.89</div>
             <p className="text-xs text-muted-foreground">
               +19% from last month
             </p>

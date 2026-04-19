@@ -1,3 +1,5 @@
+import { CONFIG } from "@/lib/config"
+
 const policies = [
   {
     title: "Repayment",
@@ -21,7 +23,7 @@ const policies = [
   },
   {
     title: "Penalty Policy",
-    description: "If your payment is late, you will be charged a penalty of 50% of your amortization payment. Please ensure timely payments to avoid additional charges.",
+    description: `If your payment is late, you will be charged a penalty of ${CONFIG.DEFAULT_SETTINGS.PENALTY_RATE_PERCENT}% of your amortization payment. Please ensure timely payments to avoid additional charges.`,
   },
 ]
 

@@ -13,6 +13,8 @@ import {
   Users 
 } from "lucide-react"
 
+import { CONFIG } from "@/lib/config"
+
 import {
   Collapsible,
   CollapsibleContent,
@@ -32,6 +34,8 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
+
+const { LABELS } = CONFIG
 
 // Sample navigation data
 const data = {
@@ -57,7 +61,7 @@ const data = {
           url: "/admin/clients?status=inactive",
         },
         {
-          title: "New Borrower",
+          title: LABELS.NEW_BORROWER,
           url: "/admin/clients/new",
         },
       ],
@@ -73,6 +77,16 @@ const data = {
       url: "/admin/payments",
       icon: CreditCard,
       isActive: false,
+      items: [
+        {
+          title: "Summary",
+          url: "/admin/payments/summary",
+        },
+        {
+          title: "Transactions",
+          url: "/admin/payments",
+        },
+      ],
     },
     {
       title: "Funding",

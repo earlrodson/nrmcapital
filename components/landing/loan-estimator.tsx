@@ -2,51 +2,39 @@
 
 import { useMemo, useState } from "react"
 import { ArrowLeft, Calculator } from "lucide-react"
+import { CONFIG } from "@/lib/config"
 
-const MIN_AMOUNT = 1000
-const MAX_AMOUNT = 100000
-const STEP_AMOUNT = 1000
-const MIN_TERM = 1
-const MAX_TERM = 17
+const { LOAN_LIMITS, INTEREST_RATE_TIERS, DEFAULT_SETTINGS } = CONFIG
+
 const PAYMENT_FREQUENCIES = [
-  { label: "Monthly", value: "MONTHLY", termsPerMonth: 1 },
-  { label: "Semi-monthly", value: "SEMI_MONTHLY", termsPerMonth: 2 },
-  { label: "Weekly", value: "WEEKLY", termsPerMonth: 4 },
+  { label: "Monthly", value: CONFIG.PAYMENT_FREQUENCIES.MONTHLY, termsPerMonth: 1 },
+  { label: "Semi-monthly", value: CONFIG.PAYMENT_FREQUENCIES.SEMI_MONTHLY, termsPerMonth: 2 },
+  { label: "Weekly", value: CONFIG.PAYMENT_FREQUENCIES.WEEKLY, termsPerMonth: 4 },
 ] as const
 
 type Frequency = (typeof PAYMENT_FREQUENCIES)[number]["value"]
-type RateTier = {
-  label: string
-  rangeLabel: string
-}
 
 function getMonthlyRate(months: number): number {
-  if (months >= 1 && months <= 6) return 7
-  if (months >= 7 && months <= 9) return 6
-  if (months >= 10 && months <= 12) return 5
-  if (months >= 13 && months <= 15) return 4
-  if (months >= 16 && months <= 17) return 3
-  throw new Error("Invalid term. Maximum is 17 months.")
+  const tier = INTEREST_RATE_TIERS.find(t => months >= t.min && months <= t.max)
+  if (tier) return tier.rate
+  throw new Error(`Invalid term: ${months} months. Maximum is ${LOAN_LIMITS.MAX_TERM_MONTHS}.`)
 }
 
-function getRateTier(months: number): RateTier {
-  if (months >= 1 && months <= 6) return { label: "Short-term Financing", rangeLabel: "1-6 months" }
-  if (months >= 7 && months <= 9) return { label: "Mid-term Solutions", rangeLabel: "7-9 months" }
-  if (months >= 10 && months <= 12) return { label: "Extended Advantage", rangeLabel: "10-12 months" }
-  if (months >= 13 && months <= 15) return { label: "Premium Rate", rangeLabel: "13-15 months" }
-  if (months >= 16 && months <= 17) return { label: "Ultimate Low-rate", rangeLabel: "16-17 months" }
-  throw new Error("Invalid term. Maximum is 17 months.")
+function getRateTier(months: number) {
+  const tier = INTEREST_RATE_TIERS.find(t => months >= t.min && months <= t.max)
+  if (tier) return { label: tier.label, rangeLabel: `${tier.min}-${tier.max} months` }
+  throw new Error(`Invalid term: ${months} months. Maximum is ${LOAN_LIMITS.MAX_TERM_MONTHS}.`)
 }
 
 function clampTerm(value: number) {
-  if (Number.isNaN(value)) return MIN_TERM
-  return Math.min(MAX_TERM, Math.max(MIN_TERM, Math.trunc(value)))
+  if (Number.isNaN(value)) return LOAN_LIMITS.MIN_TERM_MONTHS
+  return Math.min(LOAN_LIMITS.MAX_TERM_MONTHS, Math.max(LOAN_LIMITS.MIN_TERM_MONTHS, Math.trunc(value)))
 }
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-PH", {
+  return new Intl.NumberFormat(DEFAULT_SETTINGS.LOCALE, {
     style: "currency",
-    currency: "PHP",
+    currency: DEFAULT_SETTINGS.CURRENCY_CODE,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
@@ -56,7 +44,7 @@ export function LoanEstimator() {
   const [step, setStep] = useState<1 | 2>(1)
   const [principal, setPrincipal] = useState(20000)
   const [term, setTerm] = useState(6)
-  const [frequency, setFrequency] = useState<Frequency>("SEMI_MONTHLY")
+  const [frequency, setFrequency] = useState<Frequency>(CONFIG.PAYMENT_FREQUENCIES.SEMI_MONTHLY)
 
   const selectedFrequency = PAYMENT_FREQUENCIES.find((item) => item.value === frequency) ?? PAYMENT_FREQUENCIES[1]
 
@@ -85,7 +73,7 @@ export function LoanEstimator() {
       <div className="absolute -left-[20%] -top-[20%] h-64 w-64 rounded-full bg-emerald-200/20 blur-[80px] pointer-events-none"></div>
       <h3 className="mb-2 text-center text-lg font-bold tracking-tight text-slate-800 sm:text-xl relative z-10 uppercase">Instant Payment Estimator</h3>
       <p className="mb-6 text-center text-sm leading-relaxed text-slate-600">
-        Monthly rates are auto-assigned by selected term.
+        Monthly rates are auto-assigned by selected term using NRM&apos;s approved tier matrix.
       </p>
 
       {step === 1 ? (
@@ -102,17 +90,17 @@ export function LoanEstimator() {
             <input
               id="amount-slider"
               type="range"
-              min={MIN_AMOUNT}
-              max={MAX_AMOUNT}
-              step={STEP_AMOUNT}
+              min={LOAN_LIMITS.MIN_AMOUNT}
+              max={LOAN_LIMITS.MAX_AMOUNT}
+              step={LOAN_LIMITS.STEP_AMOUNT}
               value={principal}
               onChange={(event) => setPrincipal(Number(event.target.value))}
               className="loan-range mb-3 w-full"
               aria-label="Loan amount slider"
             />
             <div className="flex justify-between text-xs font-medium text-slate-500">
-              <span>{formatCurrency(MIN_AMOUNT).replace(".00", "")}</span>
-              <span>{formatCurrency(MAX_AMOUNT).replace(".00", "")}</span>
+              <span>{formatCurrency(LOAN_LIMITS.MIN_AMOUNT).replace(".00", "")}</span>
+              <span>{formatCurrency(LOAN_LIMITS.MAX_AMOUNT).replace(".00", "")}</span>
             </div>
           </div>
 
@@ -129,8 +117,8 @@ export function LoanEstimator() {
                 <input
                   id="term-slider"
                   type="range"
-                  min={MIN_TERM}
-                  max={MAX_TERM}
+                  min={LOAN_LIMITS.MIN_TERM_MONTHS}
+                  max={LOAN_LIMITS.MAX_TERM_MONTHS}
                   step={1}
                   value={term}
                   onChange={(event) => setTerm(clampTerm(Number(event.target.value)))}
@@ -139,8 +127,8 @@ export function LoanEstimator() {
                 />
                 <input
                   type="number"
-                  min={MIN_TERM}
-                  max={MAX_TERM}
+                  min={LOAN_LIMITS.MIN_TERM_MONTHS}
+                  max={LOAN_LIMITS.MAX_TERM_MONTHS}
                   value={term}
                   onChange={(event) => setTerm(clampTerm(Number(event.target.value)))}
                   className="w-20 rounded-lg border border-slate-300 bg-white/95 px-2 py-1.5 text-right text-sm font-semibold text-slate-700"
@@ -148,8 +136,8 @@ export function LoanEstimator() {
                 />
               </div>
               <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-                <span>{MIN_TERM} month</span>
-                <span>{MAX_TERM} months</span>
+                <span>{LOAN_LIMITS.MIN_TERM_MONTHS} month</span>
+                <span>{LOAN_LIMITS.MAX_TERM_MONTHS} months</span>
               </div>
               <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/85 px-3 py-2 text-sm text-emerald-800">
                 <p className="font-semibold">{estimate.rateTier.label}</p>
@@ -173,8 +161,9 @@ export function LoanEstimator() {
                     role="radio"
                     aria-checked={active}
                     onClick={() => setFrequency(item.value)}
-                    className={`swift-transition min-h-11 flex-1 rounded-lg px-2 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 active:scale-[0.99] ${active ? "bg-white text-emerald-600 shadow-sm" : "text-slate-600"
-                      }`}
+                    className={`swift-transition min-h-11 flex-1 rounded-lg px-2 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 active:scale-[0.99] ${
+                      active ? "bg-white text-emerald-600 shadow-sm" : "text-slate-600"
+                    }`}
                   >
                     {item.label}
                   </button>
