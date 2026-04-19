@@ -134,11 +134,12 @@
 }
 
 .landing-glass-theme {
-    --glass: oklch(0.985 0.012 154.5 / 78%);
-    --glass-strong: oklch(0.995 0.009 154.5 / 90%);
-    --glass-border: oklch(0.9 0.03 154.5 / 65%);
-    --shadow-glass: 0 12px 30px rgb(16 185 129 / 10%), inset 0 1px 0 rgb(255 255 255 / 48%);
-    --glass-saturate: 1.35;
+    --glass: rgba(255, 255, 255, 0.45);
+    --glass-strong: rgba(255, 255, 255, 0.65);
+    --glass-border: rgba(255, 255, 255, 0.4);
+    --shadow-glass: 0 8px 32px 0 rgba(3, 105, 161, 0.07), inset 0 1px 1px rgba(255, 255, 255, 0.8);
+    --glass-blur: 24px;
+    --glass-saturate: 1.5;
 }
 
 @layer base {
@@ -157,6 +158,15 @@
 }
 
 @layer utilities {
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+  }
+
   .loan-range {
     -webkit-appearance: none;
     appearance: none;

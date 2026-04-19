@@ -37,7 +37,7 @@ export function PoliciesSection() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
         {policies.map((policy) => (
-          <article key={policy.title} className="glass-panel flex h-full flex-col rounded-2xl p-5 sm:p-6">
+          <article key={policy.title} className="glass-panel flex h-full flex-col rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:p-6 border border-white/40">
             <h4 className="mb-2 text-base font-bold text-slate-900 sm:text-lg">{policy.title}</h4>
             <p className="text-sm leading-relaxed text-slate-600">{policy.description}</p>
           </article>

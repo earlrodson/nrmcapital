@@ -79,8 +79,9 @@ export function LoanEstimator() {
   }, [principal, term, selectedFrequency.termsPerMonth])
 
   return (
-    <section className="glass-panel mb-14 w-full max-w-md rounded-[2rem] p-5 shadow-xl sm:mb-16 sm:p-6 md:p-8">
-      <h3 className="mb-2 text-center text-lg font-bold tracking-tight text-slate-800 sm:text-xl">INSTANT PAYMENT ESTIMATOR</h3>
+    <section className="glass-panel mb-14 w-full max-w-md rounded-[2rem] p-5 shadow-2xl sm:mb-16 sm:p-6 md:p-8 border border-white/50 backdrop-blur-xl relative overflow-hidden">
+      <div className="absolute -left-[20%] -top-[20%] h-64 w-64 rounded-full bg-emerald-200/20 blur-[80px] pointer-events-none"></div>
+      <h3 className="mb-2 text-center text-lg font-bold tracking-tight text-slate-800 sm:text-xl relative z-10">INSTANT PAYMENT ESTIMATOR</h3>
       <p className="mb-6 text-center text-sm leading-relaxed text-slate-600">
         Monthly rates are auto-assigned by selected term using NRM&apos;s approved tier matrix (1-17 months only).
       </p>

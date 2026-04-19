@@ -29,8 +29,10 @@ export function FeaturesSection() {
       <h3 className="mb-8 text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">Types of Loans Offered</h3>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
         {features.map((feature) => (
-          <article key={feature.title} className="glass-panel flex h-full flex-col items-center rounded-2xl p-5 text-center sm:p-6">
-            <feature.icon className="mb-3 h-10 w-10 text-emerald-500 sm:h-11 sm:w-11" />
+          <article key={feature.title} className="glass-panel group flex h-full flex-col items-center rounded-2xl p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl sm:p-6 border border-white/40">
+            <div className="mb-4 rounded-2xl bg-emerald-50/50 p-3 transition-colors group-hover:bg-emerald-100/50 border border-white/60 shadow-sm">
+              <feature.icon className="h-8 w-8 text-emerald-600 sm:h-10 sm:w-10" />
+            </div>
             <h4 className="text-base font-bold text-slate-900 sm:text-lg">{feature.title}</h4>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">{feature.description}</p>
           </article>
