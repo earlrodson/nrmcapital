@@ -47,6 +47,20 @@ const data = {
       url: "/admin/clients",
       icon: Users,
       isActive: false,
+      items: [
+        {
+          title: "Active Clients",
+          url: "/admin/clients?status=active",
+        },
+        {
+          title: "Inactive Clients",
+          url: "/admin/clients?status=inactive",
+        },
+        {
+          title: "New Borrower",
+          url: "/admin/clients/new",
+        },
+      ],
     },
     {
       title: "Loans",
@@ -61,10 +75,20 @@ const data = {
       isActive: false,
     },
     {
-      title: "Investors",
-      url: "/admin/investors",
+      title: "Funding",
+      url: "/admin/funding",
       icon: PieChart,
       isActive: false,
+      items: [
+        {
+          title: "Add Funding",
+          url: "/admin/funding/add",
+        },
+        {
+          title: "Withdraw Funding",
+          url: "/admin/funding/withdraw",
+        },
+      ],
     },
     {
       title: "Settings",
