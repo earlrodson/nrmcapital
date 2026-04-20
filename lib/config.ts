@@ -90,6 +90,3 @@ export type PaymentFrequency = keyof typeof CONFIG.PAYMENT_FREQUENCIES
 export type PaymentMethod = keyof typeof CONFIG.PAYMENT_METHODS
 export type PaymentType = keyof typeof CONFIG.PAYMENT_TYPES
 export type FundingTransactionType = keyof typeof CONFIG.FUNDING_TRANSACTION_TYPES
-export type AttachmentType = keyof typeof CONFIG.ATTACHMENT_TYPES
-e = keyof typeof CONFIG.PAYMENT_TYPES
-export type FundingTransactionType = keyof typeof CONFIG.FUNDING_TRANSACTION_TYPES

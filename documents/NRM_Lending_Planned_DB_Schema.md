@@ -32,14 +32,16 @@ This document captures the planned PostgreSQL + Prisma schema for the lending sy
 
 ### Relation Overview
 - `User` 1..1 `Client` via `Client.user_id`
+- `User` 1..* `Attachment` via `Attachment.uploaded_by_id`
 - `User` 1..* `Loan` via `Loan.created_by_id`
 - `User` 1..* `Payment` via `Payment.recorded_by_id`
 - `User` 1..* `FundingTransaction` via `FundingTransaction.recorded_by_id`
+- `User` 1..* `SystemSetting` via `SystemSetting.updated_by_id` (optional)
 - `User` 1..* `AuditLog` via `AuditLog.user_id`
 - `Client` 1..* `Loan` via `Loan.client_id`
 - `Client` 1..* `Attachment` via `Attachment.client_id`
 - `Investor` 1..* `Loan` via `Loan.investor_id` (optional)
-- `Investor` 1..* `FundingTransaction` via `FundingTransaction.investor_id`
+- `Investor` 1..* `FundingTransaction` via `FundingTransaction.investor_id` (optional)
 - `Loan` 1..* `PaymentSchedule` via `PaymentSchedule.loan_id`
 - `Loan` 1..* `Payment` via `Payment.loan_id`
 - `PaymentSchedule` 1..* `Payment` via `Payment.payment_schedule_id` (optional)
@@ -119,6 +121,8 @@ model User {
   loans_created     Loan[]     @relation("LoanCreatedBy")
   payments_recorded Payment[]  @relation("PaymentRecordedBy")
   funding_recorded  FundingTransaction[] @relation("FundingRecordedBy")
+  attachments_uploaded Attachment[] @relation("AttachmentUploadedBy")
+  settings_updated  SystemSetting[] @relation("SystemSettingUpdatedBy")
   audit_logs        AuditLog[]
   client_profile    Client?
 
@@ -151,11 +155,14 @@ model Attachment {
   id          String         @id @default(cuid())
   client_id   String
   type        AttachmentType @default(OTHER)
-  url         String
+  storage_key String
   file_name   String?
+  uploaded_by_id String
   created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
   
   client      Client         @relation(fields: [client_id], references: [id])
+  uploaded_by User           @relation("AttachmentUploadedBy", fields: [uploaded_by_id], references: [id])
 
   @@map("attachments")
 }
@@ -194,6 +201,7 @@ model Loan {
   loan_date             DateTime
   disbursement_date     DateTime?
   expected_end_date     DateTime
+  actual_end_date       DateTime?
   status                LoanStatus        @default(ACTIVE)
   outstanding_balance   Decimal           @db.Decimal(12, 2)
   total_paid            Decimal           @default(0) @db.Decimal(12, 2)
@@ -221,6 +229,7 @@ model PaymentSchedule {
   interest_due  Decimal   @db.Decimal(12, 2)
   is_paid       Boolean   @default(false)
   paid_at       DateTime?
+  updated_at    DateTime  @updatedAt
   
   loan          Loan      @relation(fields: [loan_id], references: [id])
   payments      Payment[]
@@ -236,6 +245,7 @@ model Payment {
   payment_type         PaymentType      @default(REGULAR)
   payment_method       PaymentMethod    @default(CASH)
   payment_date         DateTime         @default(now())
+  penalty_reason       String?
   notes                String?
   recorded_by_id       String
   
@@ -263,11 +273,15 @@ model FundingTransaction {
 }
 
 model SystemSetting {
-  id          String   @id @default(cuid())
-  setting_key String   @unique
-  value       String
-  description String?
-  updated_at  DateTime @updatedAt
+  id            String   @id @default(cuid())
+  setting_key   String   @unique
+  value         String
+  description   String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  updated_by_id String?
+
+  updated_by    User?    @relation("SystemSettingUpdatedBy", fields: [updated_by_id], references: [id])
 
   @@map("system_settings")
 }
@@ -294,6 +308,24 @@ model AuditLog {
 - Financial amounts are modeled using decimal columns (`@db.Decimal(...)`) for precision.
 - Audit trail is mandatory for critical mutations (`AuditLog` model).
 - `estimated_interest` vs `total_interest` on `Loan`: the former is the projected amount at origination, the latter is the actual accrued amount updated per payment.
+
+## MVP Decisions (Locked)
+
+- Keep `Role.CLIENT` for portal-ready account modeling.
+- Keep `Client.user_id` unique for 1-to-1 user profile linkage.
+- Keep `Loan.client_id` non-unique so a client can have multiple loans.
+- Keep `FundingTransaction.investor_id` nullable for unassigned transaction workflows.
+
+## Minimum Index Plan
+
+- `loans(client_id)`
+- `loans(investor_id)`
+- `loans(status)`
+- `payment_schedules(loan_id, is_paid)`
+- `payment_schedules(due_date)`
+- `payments(loan_id)`
+- `audit_logs(entity, entity_id)`
+- `audit_logs(user_id)`
 
 ## Changelog
 

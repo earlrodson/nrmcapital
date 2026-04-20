@@ -29,18 +29,22 @@ const policies = [
 
 export function PoliciesSection() {
   return (
-    <section className="w-full max-w-5xl">
-      <div className="mb-10 text-center">
-        <h3 className="mb-3 text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">Our Policies</h3>
+    <section className="mb-24 w-full max-w-5xl">
+      <div className="animate-fade-up mb-10 text-center">
+        <h3 className="mb-3 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">Our Policies</h3>
         <p className="mx-auto max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
           NRM Capital is committed to responsible, transparent lending. Please review these key policies before applying.
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
-        {policies.map((policy) => (
-          <article key={policy.title} className="glass-panel flex h-full flex-col rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:p-6 border border-white/40">
-            <h4 className="mb-2 text-base font-bold text-slate-900 sm:text-lg">{policy.title}</h4>
+        {policies.map((policy, idx) => (
+          <article 
+            key={policy.title} 
+            className="animate-fade-up glass-panel group flex h-full flex-col rounded-2xl p-5 transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(16,185,129,0.1)] hover:border-emerald-400/40 sm:p-6 border border-white/40 border-t-emerald-500/30"
+            style={{ animationDelay: `${(idx + 2) * 100}ms` }}
+          >
+            <h4 className="mb-2 text-base font-bold text-slate-950 transition-colors group-hover:text-emerald-700 sm:text-lg">{policy.title}</h4>
             <p className="text-sm leading-relaxed text-slate-600">{policy.description}</p>
           </article>
         ))}
