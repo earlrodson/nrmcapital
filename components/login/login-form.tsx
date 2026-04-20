@@ -2,96 +2,176 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
+import { Mail, Lock, Loader2, ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 
-/** Demo-only credentials (no real auth). */
-const DEMO_EMAIL = "demo@nrmcapital.com"
-const DEMO_PASSWORD = "demo123"
+interface LoginSuccessResponse {
+  success: true
+  data: {
+    userId: string
+    role: "SUPERADMIN" | "ADMIN" | "CLIENT"
+    email: string
+    name: string
+  }
+  meta: null
+  error: null
+}
+
+interface LoginErrorResponse {
+  success: false
+  data: null
+  meta: null
+  error: {
+    code: string
+    message: string
+    details: Record<string, unknown> | null
+  }
+}
+
+type LoginResponse = LoginSuccessResponse | LoginErrorResponse
 
 export function LoginForm() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setIsLoading(true)
+
     const form = e.currentTarget
     const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim()
     const password = (form.elements.namedItem("password") as HTMLInputElement).value
 
-    if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
-      try {
-        sessionStorage.setItem("nrm-demo-session", "1")
-      } catch {
-        /* ignore quota / private mode */
-      }
-      router.push("/admin/dashboard")
-      router.refresh()
-      return
-    }
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
 
-    setError("Invalid email or password. Use the sample credentials shown as placeholders.")
+      const payload = (await response.json()) as LoginResponse
+      if (!response.ok || !payload.success) {
+        setError(payload.success ? "Login failed. Please try again." : payload.error.message)
+        return
+      }
+
+      const destination = payload.data.role === "CLIENT" ? "/client/dashboard" : "/admin/dashboard"
+      router.push(destination)
+      router.refresh()
+    } catch {
+      setError("Unable to sign in right now. Please try again in a moment.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <Card className="w-full max-w-md glass-panel">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-semibold tracking-tight">Login</CardTitle>
-        <CardDescription>Sign in to access the admin dashboard.</CardDescription>
-        <p className="text-xs text-muted-foreground pt-1">
-          Sample login: <span className="font-medium text-foreground/80">{DEMO_EMAIL}</span> /{" "}
-          <span className="font-medium text-foreground/80">{DEMO_PASSWORD}</span>
+    <div className="space-y-6">
+      <div className="flex flex-col items-center space-y-2 text-center">
+        <div className="relative h-16 w-16 mb-2 overflow-hidden rounded-xl bg-white p-2 shadow-sm border border-border/50">
+          <Image
+            src="/images/nrm-capital-logo.png"
+            alt="NRM Capital Logo"
+            fill
+            className="object-contain p-1"
+            priority
+          />
+        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+        <p className="text-sm text-muted-foreground">
+          Sign in to your NRM Capital administrator account
         </p>
-      </CardHeader>
-      <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              Email
-            </label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              placeholder={DEMO_EMAIL}
-              defaultValue=""
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
-              Password
-            </label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              placeholder={DEMO_PASSWORD}
-              required
-            />
-          </div>
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" className="w-full">
-            Sign in
-          </Button>
-        </form>
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          Back to{" "}
-          <Link href="/" className="text-primary hover:underline">
-            home
-          </Link>
+      </div>
+
+      <Card className="glass-panel-strong border-white/20 shadow-2xl overflow-hidden">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-xl">Login</CardTitle>
+          <CardDescription>Enter your credentials to access the dashboard</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="name@company.com"
+                  className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Password
+                </label>
+                <Link href="#" className="text-xs text-primary hover:underline font-medium">
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+
+            {error ? (
+              <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm p-3 rounded-md animate-in fade-in slide-in-from-top-1">
+                {error}
+              </div>
+            ) : null}
+
+            <Button type="submit" className="w-full h-11 font-medium text-base swift-transition" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  Sign in
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-col items-center space-y-4">
+        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground swift-transition">
+          &larr; Back to homepage
+        </Link>
+        <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest text-center">
+          &copy; {new Date().getFullYear()} NRM Capital. All rights reserved.
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

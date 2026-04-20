@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Bell, Search, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -36,7 +36,9 @@ import {
 
 export function AdminHeader() {
   const pathname = usePathname()
+  const router = useRouter()
   const { setTheme, theme } = useTheme()
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false)
 
   const isDashboard = pathname === "/admin/dashboard"
   
@@ -51,8 +53,28 @@ export function AdminHeader() {
     }
   })
 
+  async function handleLogout() {
+    if (isLoggingOut) {
+      return
+    }
+
+    setIsLoggingOut(true)
+
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+      })
+    } finally {
+      router.replace("/login")
+      router.refresh()
+    }
+  }
+
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 md:px-6 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 md:px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
@@ -145,8 +167,8 @@ export function AdminHeader() {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                Log out
+              <DropdownMenuItem onClick={() => void handleLogout()} disabled={isLoggingOut}>
+                {isLoggingOut ? "Logging out..." : "Log out"}
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
