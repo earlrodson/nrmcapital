@@ -328,9 +328,13 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                           <TableCell className="text-right text-muted-foreground">₱{term.interestDue}</TableCell>
                           <TableCell className="text-center">
                             {term.isPaid ? (
-                              <Badge variant="default" size="xs" className="bg-green-600">PAID</Badge>
+                              <Badge variant="default" className="bg-green-600 text-[10px]">
+                                PAID
+                              </Badge>
                             ) : (
-                              <Badge variant="outline" size="xs">PENDING</Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                PENDING
+                              </Badge>
                             )}
                           </TableCell>
                         </TableRow>

@@ -5,7 +5,7 @@ import { z } from "zod"
 
 import { requireRole } from "@/lib/api/auth-guard"
 import { parseJsonWithSchema, withServerError } from "@/lib/api/handlers"
-import { ok } from "@/lib/api/response"
+import { fail, ok } from "@/lib/api/response"
 import { R2_BUCKET_NAME, s3Client } from "@/lib/api/s3"
 
 const presignSchema = z.object({
