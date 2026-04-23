@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NRM Capital
 
-## Getting Started
+Next.js app with Drizzle ORM and PostgreSQL.
 
-First, run the development server:
+## Prerequisites
+
+- Node.js 20+
+- pnpm
+- PostgreSQL running locally
+
+## 1) Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 2) Configure environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create or update `.env`:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+DB_PROVIDER=postgres
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+DIRECT_URL=postgresql://postgres:postgres@localhost:5432/postgres
+AUTH_SECRET=dev-local-auth-secret
+```
 
-## Learn More
+Notes:
+- `DB_PROVIDER=postgres` is required for local PostgreSQL.
+- `DATABASE_URL` is used by the app runtime.
+- `DIRECT_URL` is used by Drizzle commands (falls back to `DATABASE_URL` if missing).
 
-To learn more about Next.js, take a look at the following resources:
+## 3) Prepare database schema
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Use one of the following:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+pnpm db:push
+```
 
-## Deploy on Vercel
+Or, if you prefer migrations:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm db:migrate
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 4) Seed admin user
+
+```bash
+pnpm db:seed
+```
+
+Default seeded credentials:
+- Email: `admin@nrmcapital.com`
+- Password: `Admin123!ChangeMe`
+- Role: `SUPERADMIN`
+
+## 5) Run the app
+
+```bash
+pnpm dev
+```
+
+Open [http://localhost:3000/login](http://localhost:3000/login).
+
+## 6) Login
+
+Use the seeded admin credentials:
+- Email: `admin@nrmcapital.com`
+- Password: `Admin123!ChangeMe`
+
+## Useful commands
+
+- `pnpm dev` - start local dev server
+- `pnpm lint` - run ESLint
+- `pnpm db:generate` - generate Drizzle migrations
+- `pnpm db:migrate` - run migrations
+- `pnpm db:push` - push schema directly
+- `pnpm db:studio` - open Drizzle Studio
+- `pnpm db:seed` - seed admin user

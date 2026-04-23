@@ -90,3 +90,7 @@ export const updateUserSchema = z.object({
   role: z.enum(["SUPERADMIN", "ADMIN", "CLIENT"]).optional(),
   isActive: z.boolean().optional(),
 })
+
+export const resetUserPasswordSchema = z.object({
+  password: z.string().min(6),
+})

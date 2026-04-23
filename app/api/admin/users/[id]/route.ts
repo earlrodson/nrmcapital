@@ -8,6 +8,20 @@ interface Params {
   params: Promise<{ id: string }>
 }
 
+export async function GET(_request: Request, { params }: Params) {
+  return withServerError(async () => {
+    const auth = await requireRole(["SUPERADMIN"])
+    if (auth.error) return auth.error
+    const { id } = await params
+
+    const row = await adminRepository.getUserById(id)
+    if (!row) {
+      return fail("User not found.", 404, "NOT_FOUND")
+    }
+    return ok(row)
+  })
+}
+
 export async function PATCH(request: Request, { params }: Params) {
   return withServerError(async () => {
     const auth = await requireRole(["SUPERADMIN"])
@@ -40,5 +54,26 @@ export async function PATCH(request: Request, { params }: Params) {
       isActive: row.isActive,
       name: row.name,
     })
+  })
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  return withServerError(async () => {
+    const auth = await requireRole(["SUPERADMIN"])
+    if (auth.error) return auth.error
+    const { id } = await params
+
+    const row = await adminRepository.deactivateUser(id)
+    if (!row) {
+      return fail("User not found.", 404, "NOT_FOUND")
+    }
+    await adminRepository.createAuditLog({
+      userId: auth.user.userId,
+      action: "DEACTIVATE",
+      entity: "USER",
+      entityId: row.id,
+      payload: { isActive: false },
+    })
+    return ok(row)
   })
 }

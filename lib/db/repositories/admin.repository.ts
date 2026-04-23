@@ -528,6 +528,23 @@ export class AdminRepository {
     return { rows, total: totalRow?.total ?? 0 }
   }
 
+  async getUserById(userId: string) {
+    const [row] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        isActive: users.isActive,
+        lastLoginAt: users.lastLoginAt,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+    return row ?? null
+  }
+
   async createUser(input: {
     email: string
     passwordHash: string
@@ -557,6 +574,26 @@ export class AdminRepository {
       })
       .where(eq(users.id, userId))
       .returning()
+    return row ?? null
+  }
+
+  async deactivateUser(userId: string) {
+    const [row] = await db
+      .update(users)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        isActive: users.isActive,
+        lastLoginAt: users.lastLoginAt,
+        createdAt: users.createdAt,
+      })
     return row ?? null
   }
 
