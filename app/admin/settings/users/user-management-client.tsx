@@ -68,7 +68,9 @@ export function UserManagementClient() {
   const [isLoading, setIsLoading] = React.useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
+  const [isResetDialogOpen, setIsResetDialogOpen] = React.useState(false)
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null)
+  const [resetTargetUser, setResetTargetUser] = React.useState<User | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -78,6 +80,10 @@ export function UserManagementClient() {
     email: "",
     password: "",
     role: "ADMIN" as User["role"],
+  })
+  const [resetPasswordData, setResetPasswordData] = React.useState({
+    password: "",
+    confirmPassword: "",
   })
 
   const fetchUsers = React.useCallback(async (page = 1) => {
@@ -180,19 +186,52 @@ export function UserManagementClient() {
     }
   }
 
-  const handleResetPassword = async (user: User) => {
+  const openResetDialog = (user: User) => {
+    setResetTargetUser(user)
+    setResetPasswordData({ password: "", confirmPassword: "" })
+    setError(null)
+    setIsResetDialogOpen(true)
+  }
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!resetTargetUser) return
+
+    const password = resetPasswordData.password.trim()
+    const confirmPassword = resetPasswordData.confirmPassword.trim()
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.")
+      return
+    }
+    if (password !== confirmPassword) {
+      setError("Password and confirm password do not match.")
+      return
+    }
+
+    setIsSubmitting(true)
+    setError(null)
     try {
-      const response = await fetch(`/api/admin/users/${user.id}/reset-password`, {
+      const response = await fetch(`/api/admin/users/${resetTargetUser.id}/reset-password`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password,
+        }),
       })
       const result = await response.json()
       if (result.success) {
         alert("Password reset successfully")
+        setIsResetDialogOpen(false)
+        setResetTargetUser(null)
+        setResetPasswordData({ password: "", confirmPassword: "" })
       } else {
-        alert(result.error || "Failed to reset password")
+        alert(result.error?.message || result.error || "Failed to reset password")
       }
     } catch {
       alert("An error occurred while resetting password")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -219,12 +258,14 @@ export function UserManagementClient() {
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add User
-            </Button>
-          </DialogTrigger>
+          <DialogTrigger
+            render={
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add User
+              </Button>
+            }
+          />
           <DialogContent>
             <form onSubmit={handleCreateUser}>
               <DialogHeader>
@@ -344,12 +385,14 @@ export function UserManagementClient() {
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Open menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button variant="ghost" size="icon-sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Open menu</span>
+                          </Button>
+                        }
+                      />
                       <DropdownMenuContent align="end">
                         <DropdownMenuGroup>
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
@@ -371,7 +414,7 @@ export function UserManagementClient() {
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleResetPassword(user)}>
+                          <DropdownMenuItem onClick={() => openResetDialog(user)}>
                             <Key className="mr-2 h-4 w-4" />
                             Reset Password
                           </DropdownMenuItem>
@@ -458,6 +501,74 @@ export function UserManagementClient() {
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isResetDialogOpen}
+        onOpenChange={(open) => {
+          setIsResetDialogOpen(open)
+          if (!open) {
+            setResetTargetUser(null)
+            setResetPasswordData({ password: "", confirmPassword: "" })
+          }
+        }}
+      >
+        <DialogContent>
+          <form onSubmit={handleResetPassword}>
+            <DialogHeader>
+              <DialogTitle>Reset Password</DialogTitle>
+              <DialogDescription>
+                Set a new password for {resetTargetUser?.email}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="reset-password">New Password</Label>
+                <Input
+                  id="reset-password"
+                  type="password"
+                  required
+                  minLength={6}
+                  value={resetPasswordData.password}
+                  onChange={(e) =>
+                    setResetPasswordData((prev) => ({ ...prev, password: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="reset-confirm-password">Confirm Password</Label>
+                <Input
+                  id="reset-confirm-password"
+                  type="password"
+                  required
+                  minLength={6}
+                  value={resetPasswordData.confirmPassword}
+                  onChange={(e) =>
+                    setResetPasswordData((prev) => ({
+                      ...prev,
+                      confirmPassword: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            {error && <p className="text-sm text-destructive mt-2">{error}</p>}
+            <DialogFooter className="mt-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsResetDialogOpen(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Reset Password
               </Button>
             </DialogFooter>
           </form>

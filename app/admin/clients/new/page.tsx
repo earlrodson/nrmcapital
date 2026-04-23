@@ -1,11 +1,9 @@
-import { PlaceholderPage } from "@/components/placeholder-page"
+import { NewBorrowerClient } from "./new-borrower-client"
 
 export default function AdminNewClientPage() {
   return (
-    <PlaceholderPage
-      title="New Client"
-      route="/admin/clients/new"
-      description="Placeholder for the client creation form."
-    />
+    <div className="mx-auto max-w-6xl">
+      <NewBorrowerClient />
+    </div>
   )
 }

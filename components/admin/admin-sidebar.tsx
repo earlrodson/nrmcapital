@@ -121,6 +121,35 @@ const data = {
 
 export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  
+  // Initialize state based on current pathname to avoid effect sync issues
+  const [openSections, setOpenSections] = React.useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {}
+    for (const item of data.navMain) {
+      if (item.items && pathname.startsWith(item.url)) {
+        initial[item.title] = true
+      }
+    }
+    return initial
+  })
+
+  // Synchronize when pathname changes, but only if not already open
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setOpenSections((previous) => {
+        const next = { ...previous }
+        let changed = false
+        for (const item of data.navMain) {
+          if (item.items && pathname.startsWith(item.url) && !next[item.title]) {
+            next[item.title] = true
+            changed = true
+          }
+        }
+        return changed ? next : previous
+      })
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [pathname])
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -147,7 +176,13 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
               item.items ? (
                 <Collapsible
                   key={item.title}
-                  defaultOpen={pathname.startsWith(item.url)}
+                  open={Boolean(openSections[item.title])}
+                  onOpenChange={(open) =>
+                    setOpenSections((previous) => ({
+                      ...previous,
+                      [item.title]: open,
+                    }))
+                  }
                   className="group/collapsible"
                 >
                   <SidebarMenuItem>

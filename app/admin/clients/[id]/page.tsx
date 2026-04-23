@@ -1,11 +1,11 @@
-import { PlaceholderPage } from "@/components/placeholder-page"
+import { ClientDetailClient } from "./client-detail-client"
 
-export default function AdminClientDetailPage() {
+export default async function AdminClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  
   return (
-    <PlaceholderPage
-      title="Client Details"
-      route="/admin/clients/[id]"
-      description="Placeholder for client profile details and loan history."
-    />
+    <div className="mx-auto max-w-6xl">
+      <ClientDetailClient clientId={id} />
+    </div>
   )
 }
