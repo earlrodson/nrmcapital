@@ -465,20 +465,36 @@ export class AdminRepository {
   }
 
   async getDashboardSummary() {
-    const [loanCounts] = await db
+    const [activeLoansRow] = await db
       .select({
-        activeLoans: sql<number>`COUNT(*) FILTER (WHERE ${loans.status} = 'ACTIVE')`,
-        overdueSchedules: sql<number>`COUNT(*) FILTER (WHERE ${paymentSchedules.isPaid} = false AND ${paymentSchedules.dueDate} < NOW())`,
+        activeLoans: sql<number>`COUNT(DISTINCT ${loans.id})`,
       })
       .from(loans)
-      .leftJoin(paymentSchedules, eq(paymentSchedules.loanId, loans.id))
-    const [clientsCount] = await db.select({ totalClients: count() }).from(clients)
+      .where(eq(loans.status, "ACTIVE"))
+    const [activeMembersRow] = await db
+      .select({
+        activeMembers: count(),
+      })
+      .from(clients)
+      .where(eq(clients.isActive, true))
+    const [overdueRow] = await db
+      .select({
+        overduePayments: count(),
+      })
+      .from(paymentSchedules)
+      .where(and(eq(paymentSchedules.isPaid, false), sql`${paymentSchedules.dueDate} < NOW()`))
+    const [paymentsRow] = await db
+      .select({
+        totalPayments: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
+      })
+      .from(payments)
     const funding = await this.getFundingSummary()
 
     return {
-      activeLoans: loanCounts?.activeLoans ?? 0,
-      totalClients: clientsCount?.totalClients ?? 0,
-      overduePayments: loanCounts?.overdueSchedules ?? 0,
+      totalPayments: paymentsRow?.totalPayments ?? "0",
+      activeLoans: activeLoansRow?.activeLoans ?? 0,
+      activeMembers: activeMembersRow?.activeMembers ?? 0,
+      overduePayments: overdueRow?.overduePayments ?? 0,
       availableFunding: funding.availableFunding,
     }
   }
@@ -496,18 +512,69 @@ export class AdminRepository {
     return rows
   }
 
-  async getDashboardActivity() {
+  async getDashboardActivity(input: { page: number; pageSize: number }) {
+    const activityFilter = sql`${auditLogs.entity} IN ('CLIENT', 'LOAN', 'PAYMENT', 'FUNDING_TRANSACTION')`
+
     const rows = await db
       .select({
-        id: payments.id,
-        type: sql<string>`'PAYMENT'`,
-        createdAt: payments.paymentDate,
-        payload: payments.notes,
+        id: auditLogs.id,
+        type: auditLogs.entity,
+        action: auditLogs.action,
+        entityId: auditLogs.entityId,
+        createdAt: auditLogs.createdAt,
+        actorName: users.name,
+        title: sql<string>`CASE
+          WHEN ${auditLogs.entity} = 'CLIENT' AND ${auditLogs.action} = 'CREATE' THEN 'New client onboarded'
+          WHEN ${auditLogs.entity} = 'CLIENT' AND ${auditLogs.action} = 'UPDATE' THEN 'Client profile updated'
+          WHEN ${auditLogs.entity} = 'CLIENT' AND ${auditLogs.action} = 'DEACTIVATE' THEN 'Client deactivated'
+          WHEN ${auditLogs.entity} = 'LOAN' AND ${auditLogs.action} = 'CREATE' THEN 'Loan created'
+          WHEN ${auditLogs.entity} = 'LOAN' AND ${auditLogs.action} = 'UPDATE' THEN 'Loan updated'
+          WHEN ${auditLogs.entity} = 'PAYMENT' AND ${auditLogs.action} = 'CREATE' THEN 'Payment recorded'
+          WHEN ${auditLogs.entity} = 'FUNDING_TRANSACTION' AND ${auditLogs.action} = 'CREATE' THEN 'Funding transaction recorded'
+          ELSE 'System activity'
+        END`,
+        description: sql<string>`CASE
+          WHEN ${auditLogs.entity} = 'CLIENT' THEN COALESCE(${auditLogs.payload}->>'firstName','') || ' ' || COALESCE(${auditLogs.payload}->>'lastName','')
+          WHEN ${auditLogs.entity} = 'LOAN' THEN 'Loan #' || SUBSTRING(${auditLogs.entityId} FROM 1 FOR 8)
+          WHEN ${auditLogs.entity} = 'PAYMENT' THEN COALESCE(${auditLogs.payload}->>'paymentType','PAYMENT') || ' on loan #' || COALESCE(SUBSTRING(${auditLogs.payload}->>'loanId' FROM 1 FOR 8),'')
+          WHEN ${auditLogs.entity} = 'FUNDING_TRANSACTION' THEN COALESCE(${auditLogs.payload}->>'transactionType','FUNDING')
+          ELSE COALESCE(${auditLogs.payload}->>'notes', '')
+        END`,
       })
-      .from(payments)
-      .orderBy(desc(payments.paymentDate))
-      .limit(20)
-    return rows
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.userId, users.id))
+      .where(activityFilter)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(input.pageSize)
+      .offset((input.page - 1) * input.pageSize)
+
+    const [totalRow] = await db
+      .select({ total: count() })
+      .from(auditLogs)
+      .where(activityFilter)
+
+    return { rows, total: totalRow?.total ?? 0 }
+  }
+
+  async getTopOverdueLoans(limit = 5) {
+    return db
+      .select({
+        loanId: loans.id,
+        clientId: clients.id,
+        firstName: clients.firstName,
+        lastName: clients.lastName,
+        overdueTerms: count(),
+        oldestDueDate: sql<Date>`MIN(${paymentSchedules.dueDate})`,
+        overdueAmount: sql<string>`COALESCE(SUM(${paymentSchedules.amountDue}),0)`,
+        daysOverdue: sql<number>`COALESCE(DATE_PART('day', NOW() - MIN(${paymentSchedules.dueDate})), 0)::int`,
+      })
+      .from(paymentSchedules)
+      .innerJoin(loans, eq(paymentSchedules.loanId, loans.id))
+      .innerJoin(clients, eq(loans.clientId, clients.id))
+      .where(and(eq(paymentSchedules.isPaid, false), sql`${paymentSchedules.dueDate} < NOW()`))
+      .groupBy(loans.id, clients.id, clients.firstName, clients.lastName)
+      .orderBy(desc(sql`COALESCE(DATE_PART('day', NOW() - MIN(${paymentSchedules.dueDate})), 0)`))
+      .limit(limit)
   }
 
   async getPaymentSummary() {
