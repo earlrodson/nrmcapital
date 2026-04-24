@@ -1,11 +1,9 @@
-import { PlaceholderPage } from "@/components/placeholder-page"
+import { LoanListClient } from "./loan-list-client"
 
 export default function AdminLoansPage() {
   return (
-    <PlaceholderPage
-      title="Loans"
-      route="/admin/loans"
-      description="Placeholder for the loan list with filters and status views."
-    />
+    <div className="mx-auto max-w-7xl">
+      <LoanListClient />
+    </div>
   )
 }

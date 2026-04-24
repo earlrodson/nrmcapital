@@ -4,6 +4,7 @@ export interface ApiMeta {
   page?: number
   pageSize?: number
   total?: number
+  summary?: Record<string, unknown>
 }
 
 export function ok<T>(data: T, meta?: ApiMeta, status = 200) {

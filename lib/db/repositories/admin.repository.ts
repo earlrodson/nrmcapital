@@ -22,6 +22,8 @@ interface ListInput {
   pageSize: number
   search?: string | null
   status?: string | null
+  sortBy?: string | null
+  sortOrder?: string | null
 }
 
 function moneyToString(value: string | number) {
@@ -174,6 +176,14 @@ export class AdminRepository {
 
   async listLoans(input: ListInput) {
     const clauses = []
+    const overdueClause = sql<boolean>`EXISTS (
+      SELECT 1
+      FROM payment_schedules ps
+      WHERE ps.loan_id = ${loans.id}
+        AND ps.is_paid = false
+        AND ps.due_date < NOW()
+    )`
+
     if (input.search) {
       clauses.push(or(ilike(loans.id, `%${input.search}%`), ilike(clients.firstName, `%${input.search}%`), ilike(clients.lastName, `%${input.search}%`)))
     }
@@ -181,19 +191,67 @@ export class AdminRepository {
       if (input.status === "active") clauses.push(eq(loans.status, "ACTIVE"))
       if (input.status === "completed") clauses.push(eq(loans.status, "COMPLETED"))
       if (input.status === "defaulted") clauses.push(eq(loans.status, "DEFAULTED"))
+      if (input.status === "overdue") clauses.push(overdueClause)
     }
 
     const whereClause = clauses.length ? and(...clauses) : undefined
+    const sortBy = input.sortBy ?? "createdAt"
+    const sortOrder = input.sortOrder === "asc" ? "asc" : "desc"
+
+    let orderByClause
+    if (sortBy === "loanDate") {
+      orderByClause = sortOrder === "asc" ? asc(loans.loanDate) : desc(loans.loanDate)
+    } else if (sortBy === "outstandingBalance") {
+      orderByClause = sortOrder === "asc" ? asc(loans.outstandingBalance) : desc(loans.outstandingBalance)
+    } else if (sortBy === "expectedEndDate") {
+      orderByClause = sortOrder === "asc" ? asc(loans.expectedEndDate) : desc(loans.expectedEndDate)
+    } else {
+      orderByClause = sortOrder === "asc" ? asc(loans.createdAt) : desc(loans.createdAt)
+    }
+
     const rows = await db
       .select()
       .from(loans)
       .innerJoin(clients, eq(loans.clientId, clients.id))
       .where(whereClause)
-      .orderBy(desc(loans.createdAt))
+      .orderBy(orderByClause)
       .limit(input.pageSize)
       .offset((input.page - 1) * input.pageSize)
-    const [totalRow] = await db.select({ total: count() }).from(loans).where(whereClause)
-    return { rows, total: totalRow?.total ?? 0 }
+    const [totalRow] = await db
+      .select({ total: sql<number>`COUNT(DISTINCT ${loans.id})` })
+      .from(loans)
+      .innerJoin(clients, eq(loans.clientId, clients.id))
+      .where(whereClause)
+
+    const [summaryRow] = await db
+      .select({
+        totalOutstanding: sql<string>`COALESCE(SUM(${loans.outstandingBalance}),0)`,
+        activeLoans: sql<number>`COUNT(*) FILTER (WHERE ${loans.status} = 'ACTIVE')`,
+        overdueLoans: sql<number>`COUNT(*) FILTER (WHERE ${overdueClause})`,
+      })
+      .from(loans)
+      .innerJoin(clients, eq(loans.clientId, clients.id))
+      .where(whereClause)
+
+    const [collectedThisMonthRow] = await db
+      .select({
+        collectedThisMonth: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
+      })
+      .from(payments)
+      .innerJoin(loans, eq(payments.loanId, loans.id))
+      .innerJoin(clients, eq(loans.clientId, clients.id))
+      .where(whereClause)
+
+    return {
+      rows,
+      total: totalRow?.total ?? 0,
+      summary: {
+        totalOutstanding: summaryRow?.totalOutstanding ?? "0",
+        activeLoans: summaryRow?.activeLoans ?? 0,
+        overdueLoans: summaryRow?.overdueLoans ?? 0,
+        collectedThisMonth: collectedThisMonthRow?.collectedThisMonth ?? "0",
+      },
+    }
   }
 
   async createLoan(input: {

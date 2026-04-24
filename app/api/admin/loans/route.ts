@@ -14,18 +14,23 @@ export async function GET(request: Request) {
     const paging = parsePagination(url.searchParams)
     const search = url.searchParams.get("search")
     const status = url.searchParams.get("status")
+    const sortBy = url.searchParams.get("sortBy")
+    const sortOrder = url.searchParams.get("sortOrder")
 
     const result = await adminRepository.listLoans({
       page: paging.page,
       pageSize: paging.pageSize,
       search,
       status,
+      sortBy,
+      sortOrder,
     })
 
     return ok(result.rows, {
       page: paging.page,
       pageSize: paging.pageSize,
       total: result.total,
+      summary: result.summary,
     })
   })
 }

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   Users,
   Search,
@@ -18,6 +19,14 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface ClientListItem {
   id: string
@@ -29,31 +38,84 @@ interface ClientListItem {
 }
 
 export function ClientListClient() {
+  const searchParams = useSearchParams()
   const [loading, setLoading] = React.useState(true)
   const [clients, setClients] = React.useState<ClientListItem[]>([])
   const [search, setSearch] = React.useState("")
+  const [debouncedSearch, setDebouncedSearch] = React.useState("")
+  const [deactivatingClientId, setDeactivatingClientId] = React.useState<string | null>(null)
+  const [pendingDeactivateClient, setPendingDeactivateClient] = React.useState<ClientListItem | null>(null)
+
+  const status = React.useMemo(() => {
+    const value = searchParams.get("status")
+    if (value === "active" || value === "inactive") {
+      return value
+    }
+    return null
+  }, [searchParams])
 
   React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearch(search.trim())
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [search])
+
+  React.useEffect(() => {
+    const controller = new AbortController()
+
     async function fetchClients() {
+      setLoading(true)
       try {
-        const res = await fetch("/api/admin/clients")
+        const query = new URLSearchParams()
+        if (status) query.set("status", status)
+        if (debouncedSearch) query.set("search", debouncedSearch)
+
+        const endpoint = query.size > 0 ? `/api/admin/clients?${query.toString()}` : "/api/admin/clients"
+        const res = await fetch(endpoint, { signal: controller.signal })
         const data = await res.json()
         if (data.success) {
           setClients(data.data)
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return
+        }
         console.error("Failed to fetch clients", err)
       } finally {
         setLoading(false)
       }
     }
-    fetchClients()
-  }, [])
 
-  const filteredClients = clients.filter(c =>
-    `${c.firstName} ${c.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-    c.id.toLowerCase().includes(search.toLowerCase())
-  )
+    fetchClients()
+    return () => controller.abort()
+  }, [status, debouncedSearch])
+
+  async function handleDeactivate(client: ClientListItem) {
+    if (!client.isActive || deactivatingClientId) return
+
+    setDeactivatingClientId(client.id)
+    try {
+      const res = await fetch(`/api/admin/clients/${client.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        throw new Error(`Failed to deactivate client (${res.status})`)
+      }
+
+      setClients((previous) => {
+        if (status === "active") {
+          return previous.filter((item) => item.id !== client.id)
+        }
+        return previous.map((item) =>
+          item.id === client.id ? { ...item, isActive: false } : item
+        )
+      })
+    } catch (error) {
+      console.error("Failed to deactivate client", error)
+    } finally {
+      setDeactivatingClientId(null)
+      setPendingDeactivateClient(null)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -106,7 +168,7 @@ export function ClientListClient() {
                   </div>
                 </TableCell>
               </TableRow>
-            ) : filteredClients.length === 0 ? (
+            ) : clients.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2">
@@ -119,7 +181,7 @@ export function ClientListClient() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredClients.map((client) => (
+              clients.map((client) => (
                 <TableRow key={client.id} className="group">
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -170,7 +232,13 @@ export function ClientListClient() {
                               View Profile
                             </DropdownMenuItem>
                             <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => setPendingDeactivateClient(client)}
+                              disabled={!client.isActive || deactivatingClientId === client.id}
+                            >
+                              {deactivatingClientId === client.id ? "Deactivating..." : "Deactivate"}
+                            </DropdownMenuItem>
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -182,6 +250,42 @@ export function ClientListClient() {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog
+        open={Boolean(pendingDeactivateClient)}
+        onOpenChange={(open) => {
+          if (!open && !deactivatingClientId) {
+            setPendingDeactivateClient(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deactivate borrower?</DialogTitle>
+            <DialogDescription>
+              {pendingDeactivateClient
+                ? `This will move ${pendingDeactivateClient.firstName} ${pendingDeactivateClient.lastName} to inactive clients.`
+                : "This action will move the borrower to inactive clients."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDeactivateClient(null)}
+              disabled={Boolean(deactivatingClientId)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => pendingDeactivateClient && handleDeactivate(pendingDeactivateClient)}
+              disabled={!pendingDeactivateClient || Boolean(deactivatingClientId)}
+            >
+              {deactivatingClientId ? "Deactivating..." : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
