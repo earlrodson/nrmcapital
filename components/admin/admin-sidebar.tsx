@@ -8,7 +8,6 @@ import {
   ChevronRight, 
   CreditCard, 
   LayoutDashboard, 
-  PieChart, 
   Settings, 
   Users 
 } from "lucide-react"
