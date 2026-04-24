@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { 
   User, 
   Phone, 
@@ -18,6 +19,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface ClientDetailProps {
   clientId: string
@@ -71,6 +75,17 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
     attachments: AttachmentData[]
   } | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const [isEditOpen, setIsEditOpen] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [editError, setEditError] = React.useState<string | null>(null)
+  const [editForm, setEditForm] = React.useState({
+    firstName: "",
+    lastName: "",
+    contactNumber: "",
+    address: "",
+    idType: "",
+    idNumber: "",
+  })
 
   React.useEffect(() => {
     async function fetchData() {
@@ -128,6 +143,69 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
     }
   }
 
+  const openEditDialog = () => {
+    if (!data) return
+    setEditForm({
+      firstName: data.client.firstName,
+      lastName: data.client.lastName,
+      contactNumber: data.client.contactNumber ?? "",
+      address: data.client.address ?? "",
+      idType: data.client.idType ?? "",
+      idNumber: data.client.idNumber ?? "",
+    })
+    setEditError(null)
+    setIsEditOpen(true)
+  }
+
+  const handleSaveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!data) return
+
+    setIsSaving(true)
+    setEditError(null)
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: editForm.firstName.trim(),
+          lastName: editForm.lastName.trim(),
+          contactNumber: editForm.contactNumber.trim() || undefined,
+          address: editForm.address.trim() || undefined,
+          idType: editForm.idType.trim() || undefined,
+          idNumber: editForm.idNumber.trim() || undefined,
+        }),
+      })
+      const result = await response.json()
+      if (!result.success) {
+        setEditError(result.error?.message || "Failed to update borrower profile.")
+        return
+      }
+
+      setData((previous) =>
+        previous
+          ? {
+              ...previous,
+              client: {
+                ...previous.client,
+                firstName: result.data.firstName,
+                lastName: result.data.lastName,
+                contactNumber: result.data.contactNumber,
+                address: result.data.address,
+                idType: result.data.idType,
+                idNumber: result.data.idNumber,
+              },
+            }
+          : previous
+      )
+      setIsEditOpen(false)
+    } catch {
+      setEditError("An error occurred while updating borrower profile.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
@@ -169,10 +247,99 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">Edit Profile</Button>
-          <Button size="sm">Record Payment</Button>
+          <Button variant="outline" size="sm" onClick={openEditDialog}>
+            Edit Profile
+          </Button>
+          {loan ? (
+            <Link href={`/admin/payments/new?loanId=${loan.id}`}>
+              <Button size="sm">Record Payment</Button>
+            </Link>
+          ) : (
+            <Button size="sm" disabled>
+              Record Payment
+            </Button>
+          )}
         </div>
       </div>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <form onSubmit={handleSaveProfile}>
+            <DialogHeader>
+              <DialogTitle>Edit Borrower Profile</DialogTitle>
+              <DialogDescription>Update borrower profile details and save changes.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    value={editForm.firstName}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, firstName: event.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    value={editForm.lastName}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, lastName: event.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="contactNumber">Contact Number</Label>
+                <Input
+                  id="contactNumber"
+                  value={editForm.contactNumber}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, contactNumber: event.target.value }))}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="address">Address</Label>
+                <Input
+                  id="address"
+                  value={editForm.address}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, address: event.target.value }))}
+                />
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="idType">ID Type</Label>
+                  <Input
+                    id="idType"
+                    value={editForm.idType}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, idType: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="idNumber">ID Number</Label>
+                  <Input
+                    id="idNumber"
+                    value={editForm.idNumber}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, idNumber: event.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+            {editError ? <p className="text-sm text-destructive">{editError}</p> : null}
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} disabled={isSaving}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Sidebar Info */}

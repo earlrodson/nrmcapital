@@ -44,7 +44,7 @@ export const updateLoanSchema = z.object({
 export const createPaymentSchema = z.object({
   loanId: z.string().min(1),
   amount: z.union([z.number().positive(), z.string().min(1)]),
-  recordedById: z.string().min(1),
+  recordedById: z.string().min(1).optional(),
   paymentType: z.enum(["REGULAR", "ADVANCE", "PENALTY"]).optional(),
   paymentMethod: z.enum(["CASH", "GCASH", "BANK_TRANSFER", "OTHER"]).optional(),
   paymentScheduleId: z.string().optional(),

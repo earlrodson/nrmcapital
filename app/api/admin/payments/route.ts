@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     const payment = await loansService.recordPayment({
       ...data,
-      recordedById: data.recordedById || auth.user.userId,
+      recordedById: auth.user.userId,
     })
 
     await adminRepository.createAuditLog({

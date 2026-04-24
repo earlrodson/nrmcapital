@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -45,6 +46,18 @@ export function ClientListClient() {
   const [debouncedSearch, setDebouncedSearch] = React.useState("")
   const [deactivatingClientId, setDeactivatingClientId] = React.useState<string | null>(null)
   const [pendingDeactivateClient, setPendingDeactivateClient] = React.useState<ClientListItem | null>(null)
+  const [editingClientId, setEditingClientId] = React.useState<string | null>(null)
+  const [loadingEditForm, setLoadingEditForm] = React.useState(false)
+  const [savingEditForm, setSavingEditForm] = React.useState(false)
+  const [editError, setEditError] = React.useState<string | null>(null)
+  const [editForm, setEditForm] = React.useState({
+    firstName: "",
+    lastName: "",
+    contactNumber: "",
+    address: "",
+    idType: "",
+    idNumber: "",
+  })
 
   const status = React.useMemo(() => {
     const value = searchParams.get("status")
@@ -114,6 +127,75 @@ export function ClientListClient() {
     } finally {
       setDeactivatingClientId(null)
       setPendingDeactivateClient(null)
+    }
+  }
+
+  async function openEditDialog(clientId: string) {
+    setEditingClientId(clientId)
+    setEditError(null)
+    setLoadingEditForm(true)
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}`)
+      const result = await res.json()
+      if (!result.success) {
+        setEditError(result.error?.message || "Failed to load client details.")
+        return
+      }
+      setEditForm({
+        firstName: result.data.firstName ?? "",
+        lastName: result.data.lastName ?? "",
+        contactNumber: result.data.contactNumber ?? "",
+        address: result.data.address ?? "",
+        idType: result.data.idType ?? "",
+        idNumber: result.data.idNumber ?? "",
+      })
+    } catch {
+      setEditError("An error occurred while loading client details.")
+    } finally {
+      setLoadingEditForm(false)
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!editingClientId) return
+    setSavingEditForm(true)
+    setEditError(null)
+    try {
+      const res = await fetch(`/api/admin/clients/${editingClientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: editForm.firstName.trim(),
+          lastName: editForm.lastName.trim(),
+          contactNumber: editForm.contactNumber.trim() || undefined,
+          address: editForm.address.trim() || undefined,
+          idType: editForm.idType.trim() || undefined,
+          idNumber: editForm.idNumber.trim() || undefined,
+        }),
+      })
+      const result = await res.json()
+      if (!result.success) {
+        setEditError(result.error?.message || "Failed to update client details.")
+        return
+      }
+
+      setClients((previous) =>
+        previous.map((client) =>
+          client.id === editingClientId
+            ? {
+                ...client,
+                firstName: result.data.firstName,
+                lastName: result.data.lastName,
+                contactNumber: result.data.contactNumber,
+              }
+            : client
+        )
+      )
+      setEditingClientId(null)
+    } catch {
+      setEditError("An error occurred while saving client details.")
+    } finally {
+      setSavingEditForm(false)
     }
   }
 
@@ -231,7 +313,9 @@ export function ClientListClient() {
                             <DropdownMenuItem render={<Link href={`/admin/clients/${client.id}`} />}>
                               View Profile
                             </DropdownMenuItem>
-                            <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditDialog(client.id)}>
+                              Edit Details
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive"
                               onClick={() => setPendingDeactivateClient(client)}
@@ -282,6 +366,96 @@ export function ClientListClient() {
               disabled={!pendingDeactivateClient || Boolean(deactivatingClientId)}
             >
               {deactivatingClientId ? "Deactivating..." : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(editingClientId)}
+        onOpenChange={(open) => {
+          if (!open && !savingEditForm) {
+            setEditingClientId(null)
+            setEditError(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Client Details</DialogTitle>
+            <DialogDescription>Update borrower profile information.</DialogDescription>
+          </DialogHeader>
+          {loadingEditForm ? (
+            <div className="py-6 flex items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="edit-first-name">First Name</Label>
+                  <Input
+                    id="edit-first-name"
+                    value={editForm.firstName}
+                    onChange={(event) => setEditForm((previous) => ({ ...previous, firstName: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="edit-last-name">Last Name</Label>
+                  <Input
+                    id="edit-last-name"
+                    value={editForm.lastName}
+                    onChange={(event) => setEditForm((previous) => ({ ...previous, lastName: event.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-contact-number">Contact Number</Label>
+                <Input
+                  id="edit-contact-number"
+                  value={editForm.contactNumber}
+                  onChange={(event) => setEditForm((previous) => ({ ...previous, contactNumber: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-address">Address</Label>
+                <Input
+                  id="edit-address"
+                  value={editForm.address}
+                  onChange={(event) => setEditForm((previous) => ({ ...previous, address: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="edit-id-type">ID Type</Label>
+                  <Input
+                    id="edit-id-type"
+                    value={editForm.idType}
+                    onChange={(event) => setEditForm((previous) => ({ ...previous, idType: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="edit-id-number">ID Number</Label>
+                  <Input
+                    id="edit-id-number"
+                    value={editForm.idNumber}
+                    onChange={(event) => setEditForm((previous) => ({ ...previous, idNumber: event.target.value }))}
+                  />
+                </div>
+              </div>
+              {editError ? <p className="text-sm text-destructive">{editError}</p> : null}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingClientId(null)}
+              disabled={savingEditForm}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={loadingEditForm || savingEditForm}>
+              {savingEditForm ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
