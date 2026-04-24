@@ -89,22 +89,6 @@ const data = {
       ],
     },
     {
-      title: "Funding",
-      url: "/admin/funding",
-      icon: PieChart,
-      isActive: false,
-      items: [
-        {
-          title: "Add Funding",
-          url: "/admin/funding/add",
-        },
-        {
-          title: "Withdraw Funding",
-          url: "/admin/funding/withdraw",
-        },
-      ],
-    },
-    {
       title: "Settings",
       url: "/admin/settings",
       icon: Settings,
