@@ -13,6 +13,24 @@ export async function GET(_request: Request, { params }: Params) {
     if (auth.error) return auth.error
     const { id } = await params
     const rows = await adminRepository.listLoanSchedule(id)
-    return ok(rows)
+    const loan = await adminRepository.getLoanById(id)
+    const totalPaid = Number(loan?.totalPaid ?? "0")
+    let remainingPool = Math.max(0, totalPaid)
+
+    const data = rows.map((row) => {
+      const amountDue = Number(row.amountDue ?? "0")
+      const storedPaid = Number(row.amountPaid ?? "0")
+      const fifoPaid = Math.min(amountDue, remainingPool)
+      remainingPool = Math.max(0, remainingPool - fifoPaid)
+      const effectiveAmountPaidNumber = Math.min(amountDue, Math.max(storedPaid, fifoPaid))
+      const remainingAmountNumber = Math.max(0, amountDue - effectiveAmountPaidNumber)
+      return {
+        ...row,
+        remainingAmount: remainingAmountNumber.toFixed(2),
+        effectiveAmountPaid: effectiveAmountPaidNumber.toFixed(2),
+        effectiveRemainingAmount: remainingAmountNumber.toFixed(2),
+      }
+    })
+    return ok(data)
   })
 }

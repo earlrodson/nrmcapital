@@ -140,6 +140,7 @@ export const paymentSchedules = pgTable(
     amountDue: decimal("amount_due", { precision: 12, scale: 2 }).notNull(),
     principalDue: decimal("principal_due", { precision: 12, scale: 2 }).notNull(),
     interestDue: decimal("interest_due", { precision: 12, scale: 2 }).notNull(),
+    amountPaid: decimal("amount_paid", { precision: 12, scale: 2 }).notNull().default("0"),
     isPaid: boolean("is_paid").notNull().default(false),
     paidAt: timestamp("paid_at", { mode: "date", precision: 3 }),
     updatedAt: timestamp("updated_at", { mode: "date", precision: 3 }).notNull(),

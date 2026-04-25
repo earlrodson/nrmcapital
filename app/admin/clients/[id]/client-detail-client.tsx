@@ -57,6 +57,10 @@ interface ScheduleTerm {
   amountDue: string
   principalDue: string
   interestDue: string
+  amountPaid: string
+  remainingAmount?: string
+  effectiveAmountPaid?: string
+  effectiveRemainingAmount?: string
   isPaid: boolean
 }
 
@@ -64,6 +68,32 @@ interface AttachmentData {
   id: string
   fileName: string | null
   type: string
+}
+
+type RepaymentStatus = "UPCOMING" | "DUE" | "PARTIAL" | "OVERDUE" | "PAID"
+
+function formatMoney(value: string | number) {
+  const amount = typeof value === "number" ? value : Number(value || "0")
+  return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function getTermStatus(term: ScheduleTerm): RepaymentStatus {
+  const amountDue = Number(term.amountDue || "0")
+  const amountPaid = Number(term.effectiveAmountPaid ?? term.amountPaid ?? "0")
+  const remaining = Number(term.effectiveRemainingAmount ?? Math.max(0, amountDue - amountPaid))
+
+  if (remaining <= 0) return "PAID"
+
+  const now = new Date()
+  const dueDate = new Date(term.dueDate)
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDue = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate())
+  const hasPartialPayment = amountPaid > 0
+
+  if (startOfDue < startOfToday) return "OVERDUE"
+  if (startOfDue.getTime() === startOfToday.getTime()) return hasPartialPayment ? "PARTIAL" : "DUE"
+  if (hasPartialPayment) return "PARTIAL"
+  return "UPCOMING"
 }
 
 export function ClientDetailClient({ clientId }: ClientDetailProps) {
@@ -106,7 +136,7 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
 
         // Get the most recent loan for detail view
         const activeLoan = loansData.data?.[0] || null
-        let scheduleData = { data: [] }
+        let scheduleData: { success?: boolean; data?: ScheduleTerm[] } = { data: [] }
         
         if (activeLoan) {
           const scheduleRes = await fetch(`/api/admin/loans/${activeLoan.id}/schedule`)
@@ -116,7 +146,7 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
         setData({
           client: clientData.data,
           loan: activeLoan,
-          schedule: scheduleData.data,
+          schedule: Array.isArray(scheduleData.data) ? scheduleData.data : [],
           attachments: attachmentsData.data || []
         })
       } catch (err) {
@@ -482,30 +512,46 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                         <TableHead className="text-right">Amortization</TableHead>
                         <TableHead className="text-right">Principal</TableHead>
                         <TableHead className="text-right">Interest</TableHead>
+                        <TableHead className="text-right">Paid</TableHead>
+                        <TableHead className="text-right">Remaining</TableHead>
                         <TableHead className="text-center">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {schedule.map((term) => (
-                        <TableRow key={term.id} className={term.isPaid ? "bg-green-50/30 dark:bg-green-950/10" : ""}>
+                      {schedule.map((term) => {
+                        const status = getTermStatus(term)
+                        const amountDue = Number(term.amountDue || "0")
+                        const amountPaid = Number(term.effectiveAmountPaid ?? term.amountPaid ?? "0")
+                        const remainingAmount = Number(term.effectiveRemainingAmount ?? term.remainingAmount ?? Math.max(0, amountDue - amountPaid))
+                        return (
+                        <TableRow key={term.id} className={status === "PAID" ? "bg-green-50/30 dark:bg-green-950/10" : ""}>
                           <TableCell className="font-mono text-[10px]">{term.termNumber}</TableCell>
                           <TableCell className="text-xs font-medium">{new Date(term.dueDate).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right font-semibold">₱{term.amountDue}</TableCell>
                           <TableCell className="text-right text-muted-foreground">₱{term.principalDue}</TableCell>
                           <TableCell className="text-right text-muted-foreground">₱{term.interestDue}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">₱{formatMoney(amountPaid)}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">₱{formatMoney(remainingAmount)}</TableCell>
                           <TableCell className="text-center">
-                            {term.isPaid ? (
-                              <Badge variant="default" className="bg-green-600 text-[10px]">
-                                PAID
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px]">
-                                PENDING
-                              </Badge>
-                            )}
+                            <Badge
+                              variant={status === "PAID" ? "default" : status === "OVERDUE" ? "destructive" : "outline"}
+                              className={
+                                status === "PAID"
+                                  ? "bg-green-600 text-[10px]"
+                                  : status === "PARTIAL"
+                                    ? "border-amber-500 text-amber-600 text-[10px]"
+                                    : status === "DUE"
+                                      ? "border-blue-500 text-blue-600 text-[10px]"
+                                      : status === "UPCOMING"
+                                        ? "text-[10px]"
+                                        : "text-[10px]"
+                              }
+                            >
+                              {status}
+                            </Badge>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      )})}
                     </TableBody>
                   </Table>
                 </CardContent>

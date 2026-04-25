@@ -51,6 +51,10 @@ interface LoanSchedule {
   termNumber: number
   dueDate: string
   amountDue: string
+  amountPaid?: string
+  remainingAmount?: string
+  effectiveAmountPaid?: string
+  effectiveRemainingAmount?: string
   isPaid: boolean
 }
 
@@ -90,6 +94,8 @@ interface LoansResponse {
   }
 }
 
+type RepaymentStatus = "UPCOMING" | "DUE" | "PARTIAL" | "OVERDUE" | "PAID"
+
 const STATUS_OPTIONS = [
   { label: "All", value: "all" },
   { label: "Active", value: "active" },
@@ -124,6 +130,25 @@ function buildQueryString(searchParams: URLSearchParams, updates: Record<string,
     else params.set(key, value)
   })
   return params.toString()
+}
+
+function getTermStatus(term: LoanSchedule): RepaymentStatus {
+  const amountDue = Number(term.amountDue || "0")
+  const amountPaid = Number(term.effectiveAmountPaid ?? term.amountPaid ?? "0")
+  const remaining = Number(term.effectiveRemainingAmount ?? term.remainingAmount ?? Math.max(0, amountDue - amountPaid))
+
+  if (remaining <= 0) return "PAID"
+
+  const now = new Date()
+  const dueDate = new Date(term.dueDate)
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDue = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate())
+  const hasPartialPayment = amountPaid > 0
+
+  if (startOfDue < startOfToday) return "OVERDUE"
+  if (startOfDue.getTime() === startOfToday.getTime()) return hasPartialPayment ? "PARTIAL" : "DUE"
+  if (hasPartialPayment) return "PARTIAL"
+  return "UPCOMING"
 }
 
 export function LoanListClient() {
@@ -467,14 +492,32 @@ export function LoanListClient() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {loanSchedule.slice(0, 8).map((term) => (
-                        <TableRow key={term.id}>
-                          <TableCell>{term.termNumber}</TableCell>
-                          <TableCell>{new Date(term.dueDate).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(term.amountDue)}</TableCell>
-                          <TableCell className="text-right">{term.isPaid ? "Paid" : "Pending"}</TableCell>
-                        </TableRow>
-                      ))}
+                      {loanSchedule.slice(0, 8).map((term) => {
+                        const status = getTermStatus(term)
+                        return (
+                          <TableRow key={term.id}>
+                            <TableCell>{term.termNumber}</TableCell>
+                            <TableCell>{new Date(term.dueDate).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(term.amountDue)}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge
+                                variant={status === "PAID" ? "default" : status === "OVERDUE" ? "destructive" : "outline"}
+                                className={
+                                  status === "PAID"
+                                    ? "bg-green-600 text-[10px]"
+                                    : status === "PARTIAL"
+                                      ? "border-amber-500 text-amber-600 text-[10px]"
+                                      : status === "DUE"
+                                        ? "border-blue-500 text-blue-600 text-[10px]"
+                                        : "text-[10px]"
+                                }
+                              >
+                                {status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>

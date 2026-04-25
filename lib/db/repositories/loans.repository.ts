@@ -14,7 +14,7 @@ export interface LoanWithSchedules {
   loan: Loan
   payment_schedule: Pick<
     PaymentSchedule,
-    "id" | "dueDate" | "amountDue" | "principalDue" | "interestDue" | "isPaid" | "paidAt"
+    "id" | "dueDate" | "amountDue" | "principalDue" | "interestDue" | "amountPaid" | "isPaid" | "paidAt"
   >[]
 }
 
@@ -51,6 +51,7 @@ export class DrizzleLoansRepository implements LoansRepository {
         amountDue: paymentSchedules.amountDue,
         principalDue: paymentSchedules.principalDue,
         interestDue: paymentSchedules.interestDue,
+        amountPaid: paymentSchedules.amountPaid,
         isPaid: paymentSchedules.isPaid,
         paidAt: paymentSchedules.paidAt,
       })
@@ -95,6 +96,35 @@ export class DrizzleLoansRepository implements LoansRepository {
           recordedById: input.recordedById,
         })
         .returning()
+
+      if (input.paymentScheduleId) {
+        const [schedule] = await tx
+          .select({
+            id: paymentSchedules.id,
+            loanId: paymentSchedules.loanId,
+          })
+          .from(paymentSchedules)
+          .where(eq(paymentSchedules.id, input.paymentScheduleId))
+          .limit(1)
+
+        if (!schedule || schedule.loanId !== input.loanId) {
+          throw new Error("Payment schedule not found for this loan.")
+        }
+
+        await tx
+          .update(paymentSchedules)
+          .set({
+            amountPaid: sql`${paymentSchedules.amountPaid} + ${input.amount}`,
+            isPaid: sql`(${paymentSchedules.amountPaid} + ${input.amount}) >= ${paymentSchedules.amountDue}`,
+            paidAt: sql`CASE
+              WHEN (${paymentSchedules.amountPaid} + ${input.amount}) >= ${paymentSchedules.amountDue}
+              THEN COALESCE(${paymentSchedules.paidAt}, NOW())
+              ELSE ${paymentSchedules.paidAt}
+            END`,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentSchedules.id, input.paymentScheduleId))
+      }
 
       await tx
         .update(loans)
