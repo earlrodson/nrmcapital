@@ -65,7 +65,8 @@ export function NewPaymentClient() {
 
   React.useEffect(() => {
     async function loadLoanContext() {
-      if (!loanId.trim()) {
+      const normalizedLoanId = loanId.trim().replace(/^#/, "")
+      if (!normalizedLoanId) {
         setContext(null)
         setScheduleRows([])
         return
@@ -74,15 +75,15 @@ export function NewPaymentClient() {
       setLoadingContext(true)
       setError(null)
       try {
-        const [loansRes, scheduleRes] = await Promise.all([
-          fetch(`/api/admin/loans?search=${encodeURIComponent(loanId)}&page=1&pageSize=20`),
-          fetch(`/api/admin/loans/${loanId}/schedule`),
-        ])
-        const [loansPayload, schedulePayload] = await Promise.all([loansRes.json(), scheduleRes.json()])
+        const loansRes = await fetch(`/api/admin/loans?search=${encodeURIComponent(normalizedLoanId)}&page=1&pageSize=20`)
+        const loansPayload = await loansRes.json()
 
-        const matchedRow = Array.isArray(loansPayload.data)
-          ? loansPayload.data.find((row: { loans?: { id?: string } }) => row.loans?.id === loanId)
-          : null
+        const candidates = Array.isArray(loansPayload.data) ? loansPayload.data : []
+        const exactMatch = candidates.find((row: { loans?: { id?: string } }) => row.loans?.id === normalizedLoanId)
+        const prefixedMatch = candidates.find((row: { loans?: { id?: string } }) =>
+          typeof row.loans?.id === "string" ? row.loans.id.startsWith(normalizedLoanId) : false
+        )
+        const matchedRow = exactMatch ?? prefixedMatch ?? null
 
         if (!matchedRow) {
           setContext(null)
@@ -91,11 +92,14 @@ export function NewPaymentClient() {
           return
         }
 
+        const resolvedLoanId = matchedRow.loans.id
         setContext({
           loan: matchedRow.loans,
           client: matchedRow.clients ?? null,
         })
 
+        const scheduleRes = await fetch(`/api/admin/loans/${resolvedLoanId}/schedule`)
+        const schedulePayload = await scheduleRes.json()
         const schedules = Array.isArray(schedulePayload.data) ? schedulePayload.data : []
         setScheduleRows(schedules)
       } catch {
@@ -122,6 +126,10 @@ export function NewPaymentClient() {
       setError("Penalty reason is required for penalty payments.")
       return
     }
+    if (!context) {
+      setError("Loan context is required before submitting a payment.")
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -129,7 +137,7 @@ export function NewPaymentClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          loanId: loanId.trim(),
+          loanId: context.loan.id,
           amount: amount.trim(),
           paymentType,
           paymentMethod,

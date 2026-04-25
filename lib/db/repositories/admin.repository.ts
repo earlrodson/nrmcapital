@@ -448,19 +448,39 @@ export class AdminRepository {
   }
 
   async getFundingSummary() {
-    const [row] = await db
+    const [fundingRow] = await db
       .select({
-        deposits: sql<string>`COALESCE(SUM(CASE WHEN ${fundingTransactions.transactionType} = 'DEPOSIT' THEN ${fundingTransactions.amount} ELSE 0 END),0)`,
-        withdrawals: sql<string>`COALESCE(SUM(CASE WHEN ${fundingTransactions.transactionType} = 'WITHDRAWAL' THEN ${fundingTransactions.amount} ELSE 0 END),0)`,
+        totalDeposits: sql<string>`COALESCE(SUM(CASE WHEN ${fundingTransactions.transactionType} = 'DEPOSIT' THEN ${fundingTransactions.amount} ELSE 0 END),0)`,
+        totalWithdrawals: sql<string>`COALESCE(SUM(CASE WHEN ${fundingTransactions.transactionType} = 'WITHDRAWAL' THEN ${fundingTransactions.amount} ELSE 0 END),0)`,
       })
       .from(fundingTransactions)
 
-    const deposits = Number(row?.deposits ?? "0")
-    const withdrawals = Number(row?.withdrawals ?? "0")
+    const [collectionsRow] = await db
+      .select({
+        totalCollections: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
+      })
+      .from(payments)
+
+    const [disbursedRow] = await db
+      .select({
+        totalDisbursed: sql<string>`COALESCE(SUM(${loans.principalAmount}),0)`,
+      })
+      .from(loans)
+
+    const deposits = Number(fundingRow?.totalDeposits ?? "0")
+    const withdrawals = Number(fundingRow?.totalWithdrawals ?? "0")
+    const collections = Number(collectionsRow?.totalCollections ?? "0")
+    const disbursed = Number(disbursedRow?.totalDisbursed ?? "0")
+    const cashAvailable = deposits + collections - withdrawals - disbursed
+
     return {
-      deposits: deposits.toFixed(2),
-      withdrawals: withdrawals.toFixed(2),
-      availableFunding: (deposits - withdrawals).toFixed(2),
+      totalDeposits: deposits.toFixed(2),
+      totalCollections: collections.toFixed(2),
+      totalWithdrawals: withdrawals.toFixed(2),
+      totalDisbursed: disbursed.toFixed(2),
+      cashAvailable: cashAvailable.toFixed(2),
+      // Backward-compat alias while UI/API fully shift terminology
+      availableFunding: cashAvailable.toFixed(2),
     }
   }
 
@@ -495,20 +515,34 @@ export class AdminRepository {
       activeLoans: activeLoansRow?.activeLoans ?? 0,
       activeMembers: activeMembersRow?.activeMembers ?? 0,
       overduePayments: overdueRow?.overduePayments ?? 0,
-      availableFunding: funding.availableFunding,
+      cashAvailable: funding.cashAvailable,
+      availableFunding: funding.cashAvailable,
     }
   }
 
-  async getDashboardOverview() {
+  async getDashboardOverview(granularity: "day" | "month" | "year" = "month") {
+    const bucketExpr =
+      granularity === "day"
+        ? sql`TO_CHAR(${payments.paymentDate}, 'YYYY-MM-DD')`
+        : granularity === "year"
+          ? sql`TO_CHAR(${payments.paymentDate}, 'YYYY')`
+          : sql`TO_CHAR(${payments.paymentDate}, 'YYYY-MM')`
+    const windowStart =
+      granularity === "day"
+        ? sql`CURRENT_DATE - INTERVAL '29 days'`
+        : granularity === "year"
+          ? sql`DATE_TRUNC('year', NOW()) - INTERVAL '9 years'`
+          : sql`DATE_TRUNC('month', NOW()) - INTERVAL '11 months'`
+
     const rows = await db
       .select({
-        month: sql<string>`TO_CHAR(${payments.paymentDate}, 'YYYY-MM')`,
+        bucket: bucketExpr.as("bucket"),
         total: sql<string>`SUM(${payments.amount})`,
       })
       .from(payments)
-      .groupBy(sql`TO_CHAR(${payments.paymentDate}, 'YYYY-MM')`)
-      .orderBy(sql`TO_CHAR(${payments.paymentDate}, 'YYYY-MM')`)
-      .limit(12)
+      .where(sql`${payments.paymentDate} >= ${windowStart}`)
+      .groupBy(bucketExpr)
+      .orderBy(bucketExpr)
     return rows
   }
 

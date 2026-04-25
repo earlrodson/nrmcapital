@@ -163,7 +163,7 @@ export function AdminHeader() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem render={<Link href="/admin/settings" />}>
+              <DropdownMenuItem render={<Link href="/admin/settings/profile" />}>
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />

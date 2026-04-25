@@ -68,7 +68,7 @@ export const createFundingTransactionSchema = z.object({
   amount: z.union([z.number().positive(), z.string().min(1)]),
   referenceNumber: z.string().optional(),
   notes: z.string().optional(),
-  recordedById: z.string().min(1),
+  recordedById: z.string().min(1).optional(),
 })
 
 export const updateSystemSettingSchema = z.object({

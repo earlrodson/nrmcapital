@@ -120,7 +120,11 @@ export function PaymentsTransactionsClient() {
               rows.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="text-xs">{new Date(row.paymentDate).toLocaleDateString()}</TableCell>
-                  <TableCell className="font-mono text-xs">#{row.loanId.split("-")[0]}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    <Link href={`/admin/loans?search=${encodeURIComponent(row.loanId)}`} className="text-primary hover:underline">
+                      {row.loanId}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-right font-semibold">{formatCurrency(row.amount)}</TableCell>
                   <TableCell>{row.paymentType}</TableCell>
                   <TableCell>{row.paymentMethod}</TableCell>

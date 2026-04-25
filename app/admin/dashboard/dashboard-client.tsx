@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { AlertCircle, Briefcase, CreditCard, Loader2, Users } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
@@ -12,12 +13,15 @@ interface SummaryData {
   activeLoans: number
   activeMembers: number
   overduePayments: number
+  cashAvailable: string
 }
 
 interface OverviewPoint {
-  month: string
+  bucket: string
   total: string
 }
+
+type OverviewGranularity = "day" | "month" | "year"
 
 interface ActivityItem {
   id: string
@@ -50,9 +54,17 @@ function formatCurrency(value: string) {
   }).format(amount)
 }
 
-function monthLabel(monthKey: string) {
-  const [year, month] = monthKey.split("-")
+function overviewLabel(bucket: string, granularity: OverviewGranularity) {
+  if (granularity === "year") return bucket
+  if (granularity === "day") {
+    const parsed = new Date(`${bucket}T00:00:00`)
+    if (Number.isNaN(parsed.getTime())) return bucket
+    return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+  }
+
+  const [year, month] = bucket.split("-")
   const parsed = new Date(Number(year), Number(month) - 1, 1)
+  if (Number.isNaN(parsed.getTime())) return bucket
   return parsed.toLocaleDateString(undefined, { month: "short", year: "2-digit" })
 }
 
@@ -72,11 +84,28 @@ function buildLinePath(data: number[], width: number, height: number, padding: n
     .join(" ")
 }
 
+function buildPlotPoints(data: number[], width: number, height: number, padding: number) {
+  if (data.length === 0) return []
+  const max = Math.max(...data, 1)
+  const min = Math.min(...data, 0)
+  const range = max - min || 1
+  const stepX = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0
+
+  return data.map((value, index) => {
+    const x = padding + stepX * index
+    const y = padding + (height - padding * 2) * (1 - (value - min) / range)
+    return { x, y, value }
+  })
+}
+
 export function DashboardClient() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [overviewError, setOverviewError] = React.useState<string | null>(null)
+  const [overviewLoading, setOverviewLoading] = React.useState(false)
   const [summary, setSummary] = React.useState<SummaryData | null>(null)
   const [overview, setOverview] = React.useState<OverviewPoint[]>([])
+  const [overviewGranularity, setOverviewGranularity] = React.useState<OverviewGranularity>("month")
   const [activity, setActivity] = React.useState<ActivityItem[]>([])
   const [topOverdue, setTopOverdue] = React.useState<OverdueLoanItem[]>([])
 
@@ -86,28 +115,25 @@ export function DashboardClient() {
       setLoading(true)
       setError(null)
       try {
-        const [summaryRes, overviewRes, activityRes, overdueRes] = await Promise.all([
+        const [summaryRes, activityRes, overdueRes] = await Promise.all([
           fetch("/api/admin/dashboard/summary"),
-          fetch("/api/admin/dashboard/overview"),
           fetch("/api/admin/dashboard/activity?limit=10"),
           fetch("/api/admin/dashboard/overdue-top?limit=5"),
         ])
 
-        const [summaryPayload, overviewPayload, activityPayload, overduePayload] = await Promise.all([
+        const [summaryPayload, activityPayload, overduePayload] = await Promise.all([
           summaryRes.json(),
-          overviewRes.json(),
           activityRes.json(),
           overdueRes.json(),
         ])
 
         if (!active) return
-        if (!summaryPayload.success || !overviewPayload.success || !activityPayload.success || !overduePayload.success) {
+        if (!summaryPayload.success || !activityPayload.success || !overduePayload.success) {
           setError("Failed to load dashboard data.")
           return
         }
 
         setSummary(summaryPayload.data)
-        setOverview(overviewPayload.data ?? [])
         setActivity(activityPayload.data ?? [])
         setTopOverdue(overduePayload.data ?? [])
       } catch {
@@ -124,8 +150,45 @@ export function DashboardClient() {
     }
   }, [])
 
+  React.useEffect(() => {
+    let active = true
+    async function loadOverview() {
+      setOverviewLoading(true)
+      setOverviewError(null)
+      try {
+        const overviewRes = await fetch(`/api/admin/dashboard/overview?granularity=${overviewGranularity}`)
+        const overviewPayload = await overviewRes.json()
+        if (!active) return
+        if (!overviewPayload.success) {
+          setOverviewError("Failed to load overview data.")
+          setOverview([])
+          return
+        }
+        setOverview(overviewPayload.data ?? [])
+      } catch {
+        if (!active) return
+        setOverviewError("Failed to load overview data.")
+        setOverview([])
+      } finally {
+        if (active) setOverviewLoading(false)
+      }
+    }
+
+    void loadOverview()
+    return () => {
+      active = false
+    }
+  }, [overviewGranularity])
+
   const totals = overview.map((entry) => Number(entry.total || "0"))
   const linePath = buildLinePath(totals, 720, 240, 24)
+  const plotPoints = buildPlotPoints(totals, 720, 240, 24)
+  const overviewDescription =
+    overviewGranularity === "day"
+      ? "Daily repayment collections for the last 30 days."
+      : overviewGranularity === "year"
+        ? "Yearly repayment collections for the last 10 years."
+        : "Monthly repayment collections over the last 12 months."
 
   if (loading) {
     return (
@@ -196,24 +259,76 @@ export function DashboardClient() {
         </Card>
       </div>
 
+      <div className="rounded-lg border bg-muted/30 px-4 py-3">
+        <p className="text-xs text-muted-foreground">Cash Available</p>
+        <p className="text-xl font-semibold">{formatCurrency(summary.cashAvailable)}</p>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Overview</CardTitle>
-            <CardDescription>Monthly repayment collections over time.</CardDescription>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Overview</CardTitle>
+                <CardDescription>{overviewDescription}</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant={overviewGranularity === "day" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setOverviewGranularity("day")}
+                >
+                  Daily
+                </Button>
+                <Button
+                  type="button"
+                  variant={overviewGranularity === "month" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setOverviewGranularity("month")}
+                >
+                  Monthly
+                </Button>
+                <Button
+                  type="button"
+                  variant={overviewGranularity === "year" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setOverviewGranularity("year")}
+                >
+                  Yearly
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="border-t border-dashed bg-muted/20 p-4">
-            {overview.length === 0 ? (
+            {overviewLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading overview data...
+              </div>
+            ) : overviewError ? (
+              <p className="text-sm text-destructive">{overviewError}</p>
+            ) : overview.length === 0 ? (
               <p className="text-sm text-muted-foreground">No overview data available yet.</p>
             ) : (
               <div className="space-y-3">
                 <svg viewBox="0 0 720 240" className="w-full h-56 rounded-md bg-background/70">
                   <path d={linePath} fill="none" stroke="currentColor" strokeWidth="3" className="text-primary" />
+                  {plotPoints.map((point, index) => {
+                    const entry = overview[index]
+                    if (!entry) return null
+                    const label = overviewLabel(entry.bucket, overviewGranularity)
+                    return (
+                      <circle key={entry.bucket} cx={point.x} cy={point.y} r={4} className="fill-primary stroke-background" strokeWidth={2}>
+                        <title>{`${label}: ${formatCurrency(entry.total)}`}</title>
+                      </circle>
+                    )
+                  })}
                 </svg>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {overview.map((entry) => (
-                    <span key={entry.month}>
-                      {monthLabel(entry.month)}: {formatCurrency(entry.total)}
+                    <span key={entry.bucket}>
+                      {overviewLabel(entry.bucket, overviewGranularity)}: {formatCurrency(entry.total)}
                     </span>
                   ))}
                 </div>

@@ -8,6 +8,7 @@ import {
   ChevronRight, 
   CreditCard, 
   LayoutDashboard, 
+  PieChart,
   Settings, 
   Users 
 } from "lucide-react"
@@ -84,6 +85,26 @@ const data = {
         {
           title: "Transactions",
           url: "/admin/payments",
+        },
+      ],
+    },
+    {
+      title: "Funding",
+      url: "/admin/funding",
+      icon: PieChart,
+      isActive: false,
+      items: [
+        {
+          title: "Summary",
+          url: "/admin/funding",
+        },
+        {
+          title: "Add Funding",
+          url: "/admin/funding/add",
+        },
+        {
+          title: "Withdraw Funding",
+          url: "/admin/funding/withdraw",
         },
       ],
     },

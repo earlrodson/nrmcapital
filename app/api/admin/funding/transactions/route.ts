@@ -29,7 +29,10 @@ export async function POST(request: Request) {
     const { data, error } = await parseJsonWithSchema(request, createFundingTransactionSchema)
     if (error || !data) return error
 
-    const row = await adminRepository.createFundingTransaction(data)
+    const row = await adminRepository.createFundingTransaction({
+      ...data,
+      recordedById: auth.user.userId,
+    })
     await adminRepository.createAuditLog({
       userId: auth.user.userId,
       action: "CREATE",
