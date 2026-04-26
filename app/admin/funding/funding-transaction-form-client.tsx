@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { createFundingTransaction } from "@/lib/actions/admin/investors"
 
 type TransactionType = "DEPOSIT" | "WITHDRAWAL"
 
@@ -31,19 +32,14 @@ export function FundingTransactionFormClient({ transactionType }: FundingTransac
     setSubmitting(true)
     setError(null)
     try {
-      const response = await fetch("/api/admin/funding/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transactionType,
-          amount: amount.trim(),
-          referenceNumber: referenceNumber.trim() || undefined,
-          notes: notes.trim() || undefined,
-        }),
+      const result = await createFundingTransaction({
+        transactionType,
+        amount: amount.trim(),
+        referenceNumber: referenceNumber.trim() || undefined,
+        notes: notes.trim() || undefined,
       })
-      const result = await response.json()
       if (!result.success) {
-        setError(result.error?.message || `Failed to ${isDeposit ? "add" : "withdraw"} funding.`)
+        setError(result.error || `Failed to ${isDeposit ? "add" : "withdraw"} funding.`)
         return
       }
       router.push("/admin/funding")

@@ -3,10 +3,13 @@
 import * as React from "react"
 import Link from "next/link"
 import { Loader2 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getFundingSummary, listFundingTransactions } from "@/lib/actions/admin/investors"
+import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
 
 interface FundingSummary {
   totalDeposits: string
@@ -20,59 +23,38 @@ interface FundingTransaction {
   id: string
   transactionType: "DEPOSIT" | "WITHDRAWAL"
   amount: string
-  transactionDate: string
+  transactionDate: string | Date
   referenceNumber: string | null
   notes: string | null
 }
 
-function formatCurrency(value: string) {
-  const amount = Number(value || "0")
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
-
 export function FundingSummaryClient() {
-  const [loading, setLoading] = React.useState(true)
-  const [summary, setSummary] = React.useState<FundingSummary>({
+  const summaryQuery = useQuery({
+    queryKey: ["admin", "funding", "summary"],
+    queryFn: async () => {
+      const res = await getFundingSummary()
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+  })
+  const transactionsQuery = useQuery({
+    queryKey: ["admin", "funding", "transactions", { page: 1, pageSize: 10 }],
+    queryFn: async () => {
+      const res = await listFundingTransactions({ page: 1, pageSize: 10 })
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+  })
+
+  const loading = summaryQuery.isLoading || transactionsQuery.isLoading
+  const summary: FundingSummary = summaryQuery.data ?? {
     totalDeposits: "0",
     totalCollections: "0",
     totalWithdrawals: "0",
     totalDisbursed: "0",
     cashAvailable: "0",
-  })
-  const [transactions, setTransactions] = React.useState<FundingTransaction[]>([])
-
-  React.useEffect(() => {
-    let active = true
-    async function loadFunding() {
-      setLoading(true)
-      try {
-        const [summaryRes, transactionsRes] = await Promise.all([
-          fetch("/api/admin/funding/summary"),
-          fetch("/api/admin/funding/transactions?page=1&pageSize=10"),
-        ])
-        const [summaryPayload, transactionsPayload] = await Promise.all([summaryRes.json(), transactionsRes.json()])
-        if (!active) return
-
-        if (summaryPayload.success) {
-          setSummary(summaryPayload.data)
-        }
-        if (transactionsPayload.success) {
-          setTransactions(transactionsPayload.data ?? [])
-        }
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-
-    void loadFunding()
-    return () => {
-      active = false
-    }
-  }, [])
+  }
+  const transactions: FundingTransaction[] = transactionsQuery.data?.rows ?? []
 
   return (
     <div className="space-y-6">
@@ -97,7 +79,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Total Deposits</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(summary.totalDeposits)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.totalDeposits)}
           </CardContent>
         </Card>
         <Card>
@@ -105,7 +87,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Total Collections</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(summary.totalCollections)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.totalCollections)}
           </CardContent>
         </Card>
         <Card>
@@ -113,7 +95,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Total Withdrawals</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(summary.totalWithdrawals)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.totalWithdrawals)}
           </CardContent>
         </Card>
         <Card>
@@ -121,7 +103,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Total Disbursed</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(summary.totalDisbursed)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.totalDisbursed)}
           </CardContent>
         </Card>
         <Card>
@@ -129,7 +111,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Cash Available</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(summary.cashAvailable)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.cashAvailable)}
           </CardContent>
         </Card>
       </div>
@@ -161,9 +143,9 @@ export function FundingSummaryClient() {
             ) : (
               transactions.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="text-xs">{new Date(row.transactionDate).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-xs">{formatDate(row.transactionDate)}</TableCell>
                   <TableCell>{row.transactionType}</TableCell>
-                  <TableCell className="text-right font-semibold">{formatCurrency(row.amount)}</TableCell>
+                  <TableCell className="text-right font-semibold">{formatCurrencyPHP(row.amount)}</TableCell>
                   <TableCell className="text-xs">{row.referenceNumber || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{row.notes || "—"}</TableCell>
                 </TableRow>

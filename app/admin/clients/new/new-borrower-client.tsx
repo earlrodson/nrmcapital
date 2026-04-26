@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { calculateLoanTerms } from "@/lib/domain/loan-calculations"
+import { createClient, createClientAttachment, getCurrentAdminUser } from "@/lib/actions/admin/clients"
+import { createLoan } from "@/lib/actions/admin/loans"
 
 interface AttachmentFile {
   file: File
@@ -83,11 +85,13 @@ export function NewBorrowerClient() {
   }, [loanData, termsPerMonth])
 
   React.useEffect(() => {
-    fetch("/api/auth/me")
-      .then(res => res.json())
-      .then(res => {
-        if (res.success) setCurrentUserId(res.data.userId)
-      })
+    async function loadCurrentUser() {
+      const res = await getCurrentAdminUser()
+      if (res.success) {
+        setCurrentUserId(res.data.userId)
+      }
+    }
+    void loadCurrentUser()
   }, [])
 
   const handleClientChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -165,42 +169,30 @@ export function NewBorrowerClient() {
       }
 
       // 2. Create Client
-      const clientRes = await fetch("/api/admin/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(clientData)
-      })
-      const clientResult = await clientRes.json()
-      if (!clientResult.success) throw new Error(clientResult.error?.message || "Failed to create client")
+      const clientResult = await createClient(clientData)
+      if (!clientResult.success) throw new Error(clientResult.error || "Failed to create client")
       const clientId = clientResult.data.id
 
       // 3. Create Loan
-      const loanRes = await fetch("/api/admin/loans", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId,
-          ...loanData,
-          termsPerMonth,
-          principalAmount: parseFloat(loanData.principalAmount),
-          monthlyInterestRate: parseFloat(loanData.monthlyInterestRate),
-          createdById: currentUserId,
-        })
+      const loanResult = await createLoan({
+        clientId,
+        ...loanData,
+        termsPerMonth,
+        loanDate: new Date(loanData.loanDate),
+        principalAmount: parseFloat(loanData.principalAmount),
+        monthlyInterestRate: parseFloat(loanData.monthlyInterestRate),
+        createdById: currentUserId,
       })
-      const loanResult = await loanRes.json()
-      if (!loanResult.success) throw new Error(loanResult.error?.message || "Failed to create loan")
+      if (!loanResult.success) throw new Error(loanResult.error || "Failed to create loan")
 
       // 4. Save Metadata
       for (const attr of uploadedAttachments) {
-        await fetch(`/api/admin/clients/${clientId}/attachments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            uploadedById: currentUserId,
-            storageKey: attr.storageKey,
-            type: attr.type,
-            fileName: attr.fileName
-          })
+        await createClientAttachment({
+          clientId,
+          uploadedById: currentUserId,
+          storageKey: attr.storageKey,
+          type: attr.type,
+          fileName: attr.fileName,
         })
       }
 
