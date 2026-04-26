@@ -35,6 +35,7 @@ export function NewPaymentClient() {
   const searchParams = useSearchParams()
 
   const initialLoanId = searchParams.get("loanId") ?? ""
+  const returnToParam = searchParams.get("returnTo")
   const [loanId, setLoanId] = React.useState(initialLoanId)
   const [amount, setAmount] = React.useState("")
   const [paymentType, setPaymentType] = React.useState<"REGULAR" | "ADVANCE" | "PENALTY">("REGULAR")
@@ -91,6 +92,11 @@ export function NewPaymentClient() {
           ? "Loan not found. Verify the loan ID and try again."
           : null
 
+  const redirectTo =
+    returnToParam && returnToParam.startsWith("/") && !returnToParam.startsWith("//")
+      ? returnToParam
+      : "/admin/loans"
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
@@ -128,7 +134,7 @@ export function NewPaymentClient() {
 
       setSuccessMessage("Payment recorded successfully. Redirecting to loans...")
       setTimeout(() => {
-        router.push("/admin/loans")
+        router.push(redirectTo)
       }, 900)
     } catch {
       setError("Something went wrong while recording payment.")
@@ -305,7 +311,7 @@ export function NewPaymentClient() {
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Record Payment
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.push("/admin/loans")} disabled={submitting}>
+              <Button type="button" variant="outline" onClick={() => router.push(redirectTo)} disabled={submitting}>
                 Cancel
               </Button>
             </div>

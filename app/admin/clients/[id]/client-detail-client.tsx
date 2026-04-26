@@ -278,7 +278,7 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
             Edit Profile
           </Button>
           {loan ? (
-            <Link href={`/admin/payments/new?loanId=${loan.id}`}>
+            <Link href={`/admin/payments/new?loanId=${loan.id}&returnTo=${encodeURIComponent(`/admin/clients/${clientId}`)}`}>
               <Button size="sm">Record Payment</Button>
             </Link>
           ) : (
