@@ -2,69 +2,38 @@
 
 import * as React from "react"
 import { Loader2 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getDashboardActivity } from "@/lib/actions/admin/dashboard"
 
-interface ActivityItem {
+type ActivityItem = {
   id: string
-  type: string
-  action: string
-  entityId: string
-  createdAt: string
-  actorName: string | null
   title: string
-  description: string
-}
-
-interface ActivityResponse {
-  success: boolean
-  data: ActivityItem[]
-  meta?: {
-    page: number
-    pageSize: number
-    total: number
-  }
+  type: string
+  actorName: string | null
+  description: string | null
+  createdAt: string | Date
 }
 
 export function ActivityListClient() {
-  const [loading, setLoading] = React.useState(true)
   const [page, setPage] = React.useState(1)
-  const [rows, setRows] = React.useState<ActivityItem[]>([])
-  const [total, setTotal] = React.useState(0)
   const pageSize = 20
 
-  React.useEffect(() => {
-    let active = true
-    async function loadActivity() {
-      setLoading(true)
-      try {
-        const res = await fetch(`/api/admin/dashboard/activity?page=${page}&pageSize=${pageSize}`)
-        const payload: ActivityResponse = await res.json()
-        if (!active) return
-        if (payload.success) {
-          setRows(payload.data)
-          setTotal(payload.meta?.total ?? 0)
-        } else {
-          setRows([])
-          setTotal(0)
-        }
-      } catch {
-        if (!active) return
-        setRows([])
-        setTotal(0)
-      } finally {
-        if (active) setLoading(false)
-      }
+  const activityQuery = useQuery({
+    queryKey: ["admin", "dashboard", "activity", { page, pageSize }],
+    queryFn: async () => {
+      const res = await getDashboardActivity({ page, pageSize })
+      if (!res.success) throw new Error(res.error)
+      return res.data
     }
+  })
 
-    void loadActivity()
-    return () => {
-      active = false
-    }
-  }, [page])
-
+  const loading = activityQuery.isLoading
+  const rows: ActivityItem[] = activityQuery.data?.rows ?? []
+  const total = activityQuery.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return (

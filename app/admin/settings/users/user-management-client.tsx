@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from "lucide-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,6 +44,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
+import {
+  createUser,
+  listUsers,
+  resetUserPassword,
+  updateUser,
+} from "@/lib/actions/admin/users"
 
 interface User {
   id: string
@@ -59,19 +66,13 @@ interface Pagination {
 }
 
 export function UserManagementClient() {
-  const [users, setUsers] = React.useState<User[]>([])
-  const [pagination, setPagination] = React.useState<Pagination>({
-    page: 1,
-    pageSize: 10,
-    total: 0,
-  })
-  const [isLoading, setIsLoading] = React.useState(true)
+  const queryClient = useQueryClient()
+  const [pagination, setPagination] = React.useState<Pagination>({ page: 1, pageSize: 10, total: 0 })
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
   const [isResetDialogOpen, setIsResetDialogOpen] = React.useState(false)
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null)
   const [resetTargetUser, setResetTargetUser] = React.useState<User | null>(null)
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
   // Form states
@@ -86,101 +87,91 @@ export function UserManagementClient() {
     confirmPassword: "",
   })
 
-  const fetchUsers = React.useCallback(async (page = 1) => {
-    await Promise.resolve()
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await fetch(`/api/admin/users?page=${page}&pageSize=${pagination.pageSize}`)
-      const result = await response.json()
-      if (result.success) {
-        setUsers(result.data)
-        setPagination(result.meta)
-      } else {
-        setError(result.error || "Failed to fetch users")
-      }
-    } catch {
-      setError("An error occurred while fetching users")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [pagination.pageSize])
+  const usersQuery = useQuery({
+    queryKey: ["admin", "users", { page: pagination.page, pageSize: pagination.pageSize }],
+    queryFn: async () => {
+      const res = await listUsers({ page: pagination.page, pageSize: pagination.pageSize })
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+  })
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchUsers()
-    }, 0)
-    return () => clearTimeout(timer)
-  }, [fetchUsers])
+  const createUserMutation = useMutation({
+    mutationFn: async (input: { name: string; email: string; password: string; role: User["role"] }) => {
+      const res = await createUser(input)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    onSuccess: async () => {
+      setIsCreateDialogOpen(false)
+      setFormData({ name: "", email: "", password: "", role: "ADMIN" })
+      await queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+    },
+  })
+
+  const updateUserMutation = useMutation({
+    mutationFn: async (input: { id: string; data: { name: string; role: User["role"]; isActive?: boolean } }) => {
+      const res = await updateUser(input.id, input.data)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    onSuccess: async () => {
+      setIsEditDialogOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+    },
+  })
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (input: { id: string; password: string }) => {
+      const res = await resetUserPassword(input.id, { password: input.password })
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    onSuccess: () => {
+      alert("Password reset successfully")
+      setIsResetDialogOpen(false)
+      setResetTargetUser(null)
+      setResetPasswordData({ password: "", confirmPassword: "" })
+    },
+  })
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
     setError(null)
     try {
-      const response = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      })
-      const result = await response.json()
-      if (result.success) {
-        setIsCreateDialogOpen(false)
-        setFormData({ name: "", email: "", password: "", role: "ADMIN" })
-        fetchUsers()
-      } else {
-        setError(result.error || "Failed to create user")
-      }
+      await createUserMutation.mutateAsync(formData)
     } catch {
       setError("An error occurred while creating user")
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedUser) return
-    setIsSubmitting(true)
     setError(null)
     try {
-      const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await updateUserMutation.mutateAsync({
+        id: selectedUser.id,
+        data: {
           name: formData.name,
           role: formData.role,
-        }),
+        },
       })
-      const result = await response.json()
-      if (result.success) {
-        setIsEditDialogOpen(false)
-        fetchUsers()
-      } else {
-        setError(result.error || "Failed to update user")
-      }
     } catch {
       setError("An error occurred while updating user")
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
   const handleToggleStatus = async (user: User) => {
     try {
-      const response = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await updateUserMutation.mutateAsync({
+        id: user.id,
+        data: {
           isActive: !user.isActive,
-        }),
+          name: user.name,
+          role: user.role,
+        },
       })
-      const result = await response.json()
-      if (result.success) {
-        fetchUsers()
-      } else {
-        alert(result.error || "Failed to update status")
-      }
     } catch {
       alert("An error occurred while updating status")
     }
@@ -209,29 +200,11 @@ export function UserManagementClient() {
       return
     }
 
-    setIsSubmitting(true)
     setError(null)
     try {
-      const response = await fetch(`/api/admin/users/${resetTargetUser.id}/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          password,
-        }),
-      })
-      const result = await response.json()
-      if (result.success) {
-        alert("Password reset successfully")
-        setIsResetDialogOpen(false)
-        setResetTargetUser(null)
-        setResetPasswordData({ password: "", confirmPassword: "" })
-      } else {
-        alert(result.error?.message || result.error || "Failed to reset password")
-      }
+      await resetPasswordMutation.mutateAsync({ id: resetTargetUser.id, password })
     } catch {
       alert("An error occurred while resetting password")
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -246,7 +219,12 @@ export function UserManagementClient() {
     setIsEditDialogOpen(true)
   }
 
-  const totalPages = Math.ceil(pagination.total / pagination.pageSize)
+  const users = usersQuery.data?.rows ?? []
+  const total = usersQuery.data?.total ?? 0
+  const isLoading = usersQuery.isLoading
+  const isSubmitting =
+    createUserMutation.isPending || updateUserMutation.isPending || resetPasswordMutation.isPending
+  const totalPages = Math.max(1, Math.ceil(total / pagination.pageSize))
 
   return (
     <div className="space-y-6">
@@ -434,19 +412,17 @@ export function UserManagementClient() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchUsers(pagination.page - 1)}
+            onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
             disabled={pagination.page <= 1 || isLoading}
           >
             <ChevronLeft className="h-4 w-4" />
             Previous
           </Button>
-          <div className="text-sm font-medium">
-            Page {pagination.page} of {totalPages}
-          </div>
+          <div className="text-sm font-medium">Page {pagination.page} of {totalPages}</div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchUsers(pagination.page + 1)}
+            onClick={() => setPagination((prev) => ({ ...prev, page: Math.min(totalPages, prev.page + 1) }))}
             disabled={pagination.page >= totalPages || isLoading}
           >
             Next

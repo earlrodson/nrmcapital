@@ -1,11 +1,8 @@
-import { eq } from "drizzle-orm"
-
-import { users } from "@/drizzle/schema"
 import { parseJsonWithSchema, withServerError } from "@/lib/api/handlers"
 import { ok, fail } from "@/lib/api/response"
 import { verifyPassword } from "@/lib/auth/password"
 import { createSession } from "@/lib/auth/session"
-import { db } from "@/lib/db/client"
+import { usersRepository } from "@/lib/db/repositories/users.repository"
 import { loginSchema } from "@/lib/validations/api"
 
 export async function POST(request: Request) {
@@ -13,7 +10,7 @@ export async function POST(request: Request) {
     const { data, error } = await parseJsonWithSchema(request, loginSchema)
     if (error || !data) return error
 
-    const [user] = await db.select().from(users).where(eq(users.email, data.email)).limit(1)
+    const user = await usersRepository.findByEmail(data.email)
     if (!user) {
       return fail("Invalid credentials.", 401, "INVALID_CREDENTIALS")
     }

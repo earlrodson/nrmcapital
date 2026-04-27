@@ -13,6 +13,7 @@ import {
   Loader2,
   Filter
 } from "lucide-react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,27 +29,38 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { listClients, deactivateClient, getClientById, updateClient } from "@/lib/actions/admin/clients"
 
-interface ClientListItem {
+type ClientRow = {
   id: string
   firstName: string
   lastName: string
   contactNumber: string | null
+  address?: string | null
+  idType?: string | null
+  idNumber?: string | null
   isActive: boolean
-  createdAt: string
+  createdAt: Date | string
+}
+
+type ClientUpdateInput = {
+  firstName: string
+  lastName: string
+  contactNumber?: string
+  address?: string
+  idType?: string
+  idNumber?: string
 }
 
 export function ClientListClient() {
+  const queryClient = useQueryClient()
   const searchParams = useSearchParams()
-  const [loading, setLoading] = React.useState(true)
-  const [clients, setClients] = React.useState<ClientListItem[]>([])
   const [search, setSearch] = React.useState("")
   const [debouncedSearch, setDebouncedSearch] = React.useState("")
-  const [deactivatingClientId, setDeactivatingClientId] = React.useState<string | null>(null)
-  const [pendingDeactivateClient, setPendingDeactivateClient] = React.useState<ClientListItem | null>(null)
+  
+  const [pendingDeactivateClient, setPendingDeactivateClient] = React.useState<ClientRow | null>(null)
   const [editingClientId, setEditingClientId] = React.useState<string | null>(null)
-  const [loadingEditForm, setLoadingEditForm] = React.useState(false)
-  const [savingEditForm, setSavingEditForm] = React.useState(false)
+  
   const [editError, setEditError] = React.useState<string | null>(null)
   const [editForm, setEditForm] = React.useState({
     firstName: "",
@@ -74,129 +86,100 @@ export function ClientListClient() {
     return () => clearTimeout(timeout)
   }, [search])
 
-  React.useEffect(() => {
-    const controller = new AbortController()
-
-    async function fetchClients() {
-      setLoading(true)
-      try {
-        const query = new URLSearchParams()
-        if (status) query.set("status", status)
-        if (debouncedSearch) query.set("search", debouncedSearch)
-
-        const endpoint = query.size > 0 ? `/api/admin/clients?${query.toString()}` : "/api/admin/clients"
-        const res = await fetch(endpoint, { signal: controller.signal })
-        const data = await res.json()
-        if (data.success) {
-          setClients(data.data)
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          return
-        }
-        console.error("Failed to fetch clients", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchClients()
-    return () => controller.abort()
-  }, [status, debouncedSearch])
-
-  async function handleDeactivate(client: ClientListItem) {
-    if (!client.isActive || deactivatingClientId) return
-
-    setDeactivatingClientId(client.id)
-    try {
-      const res = await fetch(`/api/admin/clients/${client.id}`, { method: "DELETE" })
-      if (!res.ok) {
-        throw new Error(`Failed to deactivate client (${res.status})`)
-      }
-
-      setClients((previous) => {
-        if (status === "active") {
-          return previous.filter((item) => item.id !== client.id)
-        }
-        return previous.map((item) =>
-          item.id === client.id ? { ...item, isActive: false } : item
-        )
+  const clientsQuery = useQuery({
+    queryKey: ["admin", "clients", { status, search: debouncedSearch }],
+    queryFn: async () => {
+      const res = await listClients({
+        page: 1,
+        pageSize: 50,
+        status,
+        search: debouncedSearch
       })
-    } catch (error) {
-      console.error("Failed to deactivate client", error)
-    } finally {
-      setDeactivatingClientId(null)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    }
+  })
+
+  const deactivateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await deactivateClient(id)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "clients"] })
       setPendingDeactivateClient(null)
     }
-  }
+  })
 
-  async function openEditDialog(clientId: string) {
-    setEditingClientId(clientId)
-    setEditError(null)
-    setLoadingEditForm(true)
-    try {
-      const res = await fetch(`/api/admin/clients/${clientId}`)
-      const result = await res.json()
-      if (!result.success) {
-        setEditError(result.error?.message || "Failed to load client details.")
-        return
-      }
-      setEditForm({
-        firstName: result.data.firstName ?? "",
-        lastName: result.data.lastName ?? "",
-        contactNumber: result.data.contactNumber ?? "",
-        address: result.data.address ?? "",
-        idType: result.data.idType ?? "",
-        idNumber: result.data.idNumber ?? "",
-      })
-    } catch {
-      setEditError("An error occurred while loading client details.")
-    } finally {
-      setLoadingEditForm(false)
-    }
-  }
-
-  async function handleSaveEdit() {
-    if (!editingClientId) return
-    setSavingEditForm(true)
-    setEditError(null)
-    try {
-      const res = await fetch(`/api/admin/clients/${editingClientId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: editForm.firstName.trim(),
-          lastName: editForm.lastName.trim(),
-          contactNumber: editForm.contactNumber.trim() || undefined,
-          address: editForm.address.trim() || undefined,
-          idType: editForm.idType.trim() || undefined,
-          idNumber: editForm.idNumber.trim() || undefined,
-        }),
-      })
-      const result = await res.json()
-      if (!result.success) {
-        setEditError(result.error?.message || "Failed to update client details.")
-        return
-      }
-
-      setClients((previous) =>
-        previous.map((client) =>
-          client.id === editingClientId
-            ? {
-                ...client,
-                firstName: result.data.firstName,
-                lastName: result.data.lastName,
-                contactNumber: result.data.contactNumber,
-              }
-            : client
-        )
-      )
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: ClientUpdateInput }) => {
+      const res = await updateClient(id, data)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "clients"] })
       setEditingClientId(null)
-    } catch {
-      setEditError("An error occurred while saving client details.")
-    } finally {
-      setSavingEditForm(false)
     }
+  })
+
+  const clientDetailQuery = useQuery({
+    queryKey: ["admin", "clients", editingClientId],
+    queryFn: async () => {
+      if (!editingClientId) return null
+      const res = await getClientById(editingClientId)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    enabled: !!editingClientId
+  })
+
+  const loading = clientsQuery.isLoading
+  const clients: ClientRow[] = clientsQuery.data?.rows ?? []
+
+  function handleDeactivate(client: ClientRow) {
+    if (!client.isActive) return
+    deactivateMutation.mutate(client.id)
+  }
+
+  function handleSaveEdit() {
+    if (!editingClientId) return
+    setEditError(null)
+    updateMutation.mutate({
+      id: editingClientId,
+      data: {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        contactNumber: editForm.contactNumber.trim() || undefined,
+        address: editForm.address.trim() || undefined,
+        idType: editForm.idType.trim() || undefined,
+        idNumber: editForm.idNumber.trim() || undefined,
+      }
+    }, {
+      onError: (err) => {
+        setEditError(err instanceof Error ? err.message : "Failed to update client.")
+      }
+    })
+  }
+
+  const openEditDialog = async (id: string) => {
+    setEditError(null)
+    setEditingClientId(id)
+    const res = await getClientById(id)
+    if (!res.success) {
+      setEditError(res.error)
+      return
+    }
+    const data = res.data
+    setEditForm({
+      firstName: data.firstName ?? "",
+      lastName: data.lastName ?? "",
+      contactNumber: data.contactNumber ?? "",
+      address: data.address ?? "",
+      idType: data.idType ?? "",
+      idNumber: data.idNumber ?? "",
+    })
   }
 
   return (
@@ -313,15 +296,15 @@ export function ClientListClient() {
                             <DropdownMenuItem render={<Link href={`/admin/clients/${client.id}`} />}>
                               View Profile
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEditDialog(client.id)}>
+                            <DropdownMenuItem onClick={() => void openEditDialog(client.id)}>
                               Edit Details
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive"
                               onClick={() => setPendingDeactivateClient(client)}
-                              disabled={!client.isActive || deactivatingClientId === client.id}
+                              disabled={!client.isActive || deactivateMutation.isPending}
                             >
-                              {deactivatingClientId === client.id ? "Deactivating..." : "Deactivate"}
+                              {deactivateMutation.isPending && deactivateMutation.variables === client.id ? "Deactivating..." : "Deactivate"}
                             </DropdownMenuItem>
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
@@ -338,7 +321,7 @@ export function ClientListClient() {
       <Dialog
         open={Boolean(pendingDeactivateClient)}
         onOpenChange={(open) => {
-          if (!open && !deactivatingClientId) {
+          if (!open && !deactivateMutation.isPending) {
             setPendingDeactivateClient(null)
           }
         }}
@@ -356,16 +339,16 @@ export function ClientListClient() {
             <Button
               variant="outline"
               onClick={() => setPendingDeactivateClient(null)}
-              disabled={Boolean(deactivatingClientId)}
+              disabled={deactivateMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={() => pendingDeactivateClient && handleDeactivate(pendingDeactivateClient)}
-              disabled={!pendingDeactivateClient || Boolean(deactivatingClientId)}
+              disabled={!pendingDeactivateClient || deactivateMutation.isPending}
             >
-              {deactivatingClientId ? "Deactivating..." : "Deactivate"}
+              {deactivateMutation.isPending ? "Deactivating..." : "Deactivate"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -374,7 +357,7 @@ export function ClientListClient() {
       <Dialog
         open={Boolean(editingClientId)}
         onOpenChange={(open) => {
-          if (!open && !savingEditForm) {
+          if (!open && !updateMutation.isPending) {
             setEditingClientId(null)
             setEditError(null)
           }
@@ -385,7 +368,7 @@ export function ClientListClient() {
             <DialogTitle>Edit Client Details</DialogTitle>
             <DialogDescription>Update borrower profile information.</DialogDescription>
           </DialogHeader>
-          {loadingEditForm ? (
+          {clientDetailQuery.isLoading ? (
             <div className="py-6 flex items-center justify-center">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
             </div>
@@ -450,12 +433,12 @@ export function ClientListClient() {
             <Button
               variant="outline"
               onClick={() => setEditingClientId(null)}
-              disabled={savingEditForm}
+              disabled={updateMutation.isPending}
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit} disabled={loadingEditForm || savingEditForm}>
-              {savingEditForm ? "Saving..." : "Save Changes"}
+            <Button onClick={handleSaveEdit} disabled={clientDetailQuery.isLoading || updateMutation.isPending}>
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
