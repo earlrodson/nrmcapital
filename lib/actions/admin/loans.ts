@@ -101,6 +101,19 @@ export async function getLoanSchedule(id: string) {
   })
 }
 
+export async function getLoanContextById(loanIdOrPrefix: string) {
+  return withActionError(async () => {
+    await requireActionRole(["ADMIN", "SUPERADMIN"])
+    const row = await adminRepository.findLoanContextById(loanIdOrPrefix)
+    return row
+      ? {
+          loan: row.loan,
+          client: row.client,
+        }
+      : null
+  })
+}
+
 export async function getLoanPayments(id: string) {
   return withActionError(async () => {
     await requireActionRole(["ADMIN", "SUPERADMIN"])

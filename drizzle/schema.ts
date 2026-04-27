@@ -59,7 +59,10 @@ export const clients = pgTable(
     updatedAt: timestamp("updated_at", { mode: "date", precision: 3 }).notNull(),
     deletedAt: timestamp("deleted_at", { mode: "date", precision: 3 }),
   },
-  (table) => [uniqueIndex("clients_user_id_key").on(table.userId)],
+  (table) => [
+    uniqueIndex("clients_user_id_key").on(table.userId),
+    index("clients_is_active_created_at_idx").on(table.isActive, table.createdAt),
+  ],
 )
 
 export const investors = pgTable("investors", {
@@ -172,21 +175,25 @@ export const payments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict", onUpdate: "cascade" }),
   },
-  (table) => [index("payments_loan_id_idx").on(table.loanId)],
+  (table) => [index("payments_loan_id_idx").on(table.loanId), index("payments_payment_date_idx").on(table.paymentDate)],
 )
 
-export const fundingTransactions = pgTable("funding_transactions", {
-  id: text("id").primaryKey(),
-  investorId: text("investor_id").references(() => investors.id, { onDelete: "set null", onUpdate: "cascade" }),
-  transactionType: fundingTransactionTypeEnum("transaction_type").notNull(),
-  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
-  transactionDate: timestamp("transaction_date", { mode: "date", precision: 3 }).notNull().defaultNow(),
-  referenceNumber: text("reference_number"),
-  notes: text("notes"),
-  recordedById: text("recorded_by_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "restrict", onUpdate: "cascade" }),
-})
+export const fundingTransactions = pgTable(
+  "funding_transactions",
+  {
+    id: text("id").primaryKey(),
+    investorId: text("investor_id").references(() => investors.id, { onDelete: "set null", onUpdate: "cascade" }),
+    transactionType: fundingTransactionTypeEnum("transaction_type").notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    transactionDate: timestamp("transaction_date", { mode: "date", precision: 3 }).notNull().defaultNow(),
+    referenceNumber: text("reference_number"),
+    notes: text("notes"),
+    recordedById: text("recorded_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict", onUpdate: "cascade" }),
+  },
+  (table) => [index("funding_transactions_transaction_date_idx").on(table.transactionDate)],
+)
 
 export const systemSettings = pgTable(
   "system_settings",
@@ -215,5 +222,9 @@ export const auditLogs = pgTable(
     payload: jsonb("payload").notNull(),
     createdAt: timestamp("created_at", { mode: "date", precision: 3 }).notNull().defaultNow(),
   },
-  (table) => [index("audit_logs_entity_entity_id_idx").on(table.entity, table.entityId), index("audit_logs_user_id_idx").on(table.userId)],
+  (table) => [
+    index("audit_logs_entity_entity_id_idx").on(table.entity, table.entityId),
+    index("audit_logs_user_id_idx").on(table.userId),
+    index("audit_logs_entity_created_at_idx").on(table.entity, table.createdAt),
+  ],
 )

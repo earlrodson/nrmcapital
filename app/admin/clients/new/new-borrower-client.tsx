@@ -20,13 +20,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { calculateLoanTerms } from "@/lib/domain/loan-calculations"
-import { createClient, createClientAttachment, getCurrentAdminUser } from "@/lib/actions/admin/clients"
-import { createLoan } from "@/lib/actions/admin/loans"
+import { createClientAttachmentsBatch, createClientWithLoan, getCurrentAdminUser } from "@/lib/actions/admin/clients"
 
 interface AttachmentFile {
   file: File
   type: "GOV_ID" | "PROOF_OF_INCOME" | "PROOF_OF_BILLING" | "CONTRACT" | "OTHER"
   id: string
+}
+
+interface UploadedAttachment {
+  storageKey: string
+  type: AttachmentFile["type"]
+  fileName: string
 }
 
 const FREQUENCY_MAP = {
@@ -137,26 +142,34 @@ export function NewBorrowerClient() {
     setError(null)
     try {
       // 1. Upload Attachments to R2
-      const uploadedAttachments = []
+      const uploadedAttachments: UploadedAttachment[] = []
       if (attachments.length > 0) {
         try {
-          for (const attr of attachments) {
-            const formData = new FormData()
-            formData.append("file", attr.file)
-            formData.append("folder", "attachments")
+          const maxConcurrentUploads = 3
+          const pending = [...attachments]
+          const workers = Array.from({ length: Math.min(maxConcurrentUploads, pending.length) }, async () => {
+            while (pending.length > 0) {
+              const attr = pending.shift()
+              if (!attr) return
 
-            const uploadApiRes = await fetch("/api/admin/upload/file", {
-              method: "POST",
-              body: formData,
-            })
+              const formData = new FormData()
+              formData.append("file", attr.file)
+              formData.append("folder", "attachments")
 
-            const uploadApiData = await uploadApiRes.json()
-            if (uploadApiRes.status === 503) throw new Error("R2_NOT_CONFIGURED")
-            if (!uploadApiData.success) throw new Error(`Upload failed for ${attr.file.name}`)
+              const uploadApiRes = await fetch("/api/admin/upload/file", {
+                method: "POST",
+                body: formData,
+              })
 
-            const { storageKey } = uploadApiData.data
-            uploadedAttachments.push({ storageKey, type: attr.type, fileName: attr.file.name })
-          }
+              const uploadApiData = await uploadApiRes.json()
+              if (uploadApiRes.status === 503) throw new Error("R2_NOT_CONFIGURED")
+              if (!uploadApiData.success) throw new Error(`Upload failed for ${attr.file.name}`)
+              const { storageKey } = uploadApiData.data
+              uploadedAttachments.push({ storageKey, type: attr.type, fileName: attr.file.name })
+            }
+          })
+
+          await Promise.all(workers)
         } catch (uploadErr) {
           const message = uploadErr instanceof Error ? uploadErr.message : "Upload error"
           if (message !== "R2_NOT_CONFIGURED") {
@@ -168,32 +181,33 @@ export function NewBorrowerClient() {
         }
       }
 
-      // 2. Create Client
-      const clientResult = await createClient(clientData)
-      if (!clientResult.success) throw new Error(clientResult.error || "Failed to create client")
-      const clientId = clientResult.data.id
-
-      // 3. Create Loan
-      const loanResult = await createLoan({
-        clientId,
-        ...loanData,
-        termsPerMonth,
-        loanDate: new Date(loanData.loanDate),
-        principalAmount: parseFloat(loanData.principalAmount),
-        monthlyInterestRate: parseFloat(loanData.monthlyInterestRate),
-        createdById: currentUserId,
+      // 2. Create Client + Loan in one transaction
+      const onboardingResult = await createClientWithLoan({
+        client: clientData,
+        loan: {
+          ...loanData,
+          termsPerMonth,
+          loanDate: new Date(loanData.loanDate),
+          principalAmount: parseFloat(loanData.principalAmount),
+          monthlyInterestRate: parseFloat(loanData.monthlyInterestRate),
+          createdById: currentUserId,
+        },
       })
-      if (!loanResult.success) throw new Error(loanResult.error || "Failed to create loan")
+      if (!onboardingResult.success) throw new Error(onboardingResult.error || "Failed to complete onboarding")
+      const clientId = onboardingResult.data.client.id
 
-      // 4. Save Metadata
-      for (const attr of uploadedAttachments) {
-        await createClientAttachment({
-          clientId,
-          uploadedById: currentUserId,
-          storageKey: attr.storageKey,
-          type: attr.type,
-          fileName: attr.fileName,
-        })
+      // 3. Save attachment metadata in batch
+      if (uploadedAttachments.length > 0) {
+        const metadataResult = await createClientAttachmentsBatch(
+          uploadedAttachments.map((attr) => ({
+            clientId,
+            uploadedById: currentUserId,
+            storageKey: attr.storageKey,
+            type: attr.type,
+            fileName: attr.fileName,
+          })),
+        )
+        if (!metadataResult.success) throw new Error(metadataResult.error || "Failed to save attachment metadata")
       }
 
       router.push(`/admin/clients/${clientId}`)
@@ -380,7 +394,7 @@ export function NewBorrowerClient() {
 
         {/* Sidebar Summary - Right */}
         <aside className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
-          <Card className="shadow-lg border-primary/20 bg-primary/[0.02] overflow-hidden">
+          <Card className="shadow-lg border-primary/20 bg-primary/2 overflow-hidden">
             <CardHeader className="bg-primary/5 border-b border-primary/10">
               <CardTitle className="text-sm font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                 <Calculator className="h-4 w-4" />

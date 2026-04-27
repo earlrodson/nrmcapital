@@ -174,6 +174,32 @@ export class AdminRepository {
     return row
   }
 
+  async createAttachmentsBatch(
+    items: Array<{
+      clientId: string
+      uploadedById: string
+      storageKey: string
+      type?: "GOV_ID" | "PROOF_OF_INCOME" | "PROOF_OF_BILLING" | "CONTRACT" | "OTHER"
+      fileName?: string
+    }>,
+  ) {
+    if (items.length === 0) return []
+    return db
+      .insert(attachments)
+      .values(
+        items.map((item) => ({
+          id: randomUUID(),
+          clientId: item.clientId,
+          uploadedById: item.uploadedById,
+          storageKey: item.storageKey,
+          type: item.type ?? "OTHER",
+          fileName: item.fileName,
+          updatedAt: new Date(),
+        })),
+      )
+      .returning()
+  }
+
   async listLoans(input: ListInput) {
     const clauses = [eq(clients.isActive, true)]
     const overdueClause = sql<boolean>`EXISTS (
@@ -185,7 +211,12 @@ export class AdminRepository {
     )`
 
     if (input.search) {
-      clauses.push(or(ilike(loans.id, `%${input.search}%`), ilike(clients.firstName, `%${input.search}%`), ilike(clients.lastName, `%${input.search}%`)))
+      const searchClause = or(
+        ilike(loans.id, `%${input.search}%`),
+        ilike(clients.firstName, `%${input.search}%`),
+        ilike(clients.lastName, `%${input.search}%`),
+      )
+      if (searchClause) clauses.push(searchClause)
     }
     if (input.status) {
       if (input.status === "active") clauses.push(eq(loans.status, "ACTIVE"))
@@ -325,6 +356,106 @@ export class AdminRepository {
     })
   }
 
+  async createClientWithLoan(input: {
+    client: {
+      userId?: string
+      firstName: string
+      lastName: string
+      contactNumber?: string
+      address?: string
+      idType?: string
+      idNumber?: string
+      notes?: string
+      isActive?: boolean
+    }
+    loan: {
+      investorId?: string
+      loanType: "FLAT" | "DIMINISHING"
+      principalAmount: number | string
+      monthlyInterestRate: number | string
+      months: number
+      termsPerMonth: number
+      paymentFrequency: "MONTHLY" | "SEMI_MONTHLY" | "WEEKLY"
+      loanDate: Date
+      disbursementDate?: Date
+      createdById: string
+      notes?: string
+    }
+  }) {
+    const calculations = calculateLoanTerms({
+      principalAmount: input.loan.principalAmount,
+      monthlyInterestRate: input.loan.monthlyInterestRate,
+      months: input.loan.months,
+      termsPerMonth: input.loan.termsPerMonth,
+      loanDate: input.loan.loanDate,
+    })
+
+    return db.transaction(async (tx) => {
+      const [client] = await tx
+        .insert(clients)
+        .values({
+          id: randomUUID(),
+          userId: input.client.userId,
+          firstName: input.client.firstName,
+          lastName: input.client.lastName,
+          contactNumber: input.client.contactNumber,
+          address: input.client.address,
+          idType: input.client.idType,
+          idNumber: input.client.idNumber,
+          notes: input.client.notes,
+          isActive: input.client.isActive ?? true,
+          updatedAt: new Date(),
+        })
+        .returning()
+
+      const [loan] = await tx
+        .insert(loans)
+        .values({
+          id: randomUUID(),
+          clientId: client.id,
+          investorId: input.loan.investorId,
+          loanType: input.loan.loanType,
+          principalAmount: calculations.principalAmount,
+          monthlyInterestRate: calculations.monthlyInterestRate,
+          months: input.loan.months,
+          termsPerMonth: input.loan.termsPerMonth,
+          totalTerms: calculations.totalTerms,
+          paymentFrequency: input.loan.paymentFrequency,
+          estimatedInterest: calculations.estimatedInterest,
+          totalInterest: calculations.estimatedInterest,
+          totalPayable: calculations.totalPayable,
+          amortizationAmount: calculations.amortizationAmount,
+          loanDate: input.loan.loanDate,
+          disbursementDate: input.loan.disbursementDate,
+          expectedEndDate: calculations.expectedEndDate,
+          outstandingBalance: calculations.totalPayable,
+          createdById: input.loan.createdById,
+          notes: input.loan.notes,
+          updatedAt: new Date(),
+        })
+        .returning()
+
+      const scheduleRows = []
+      for (let i = 1; i <= calculations.totalTerms; i += 1) {
+        const dueDate = new Date(input.loan.loanDate)
+        dueDate.setDate(dueDate.getDate() + Math.floor((30 / input.loan.termsPerMonth) * i))
+        scheduleRows.push({
+          id: randomUUID(),
+          loanId: loan.id,
+          termNumber: i,
+          dueDate,
+          amountDue: calculations.amortizationAmount,
+          principalDue: calculations.principalPerTerm,
+          interestDue: calculations.interestPerTerm,
+          updatedAt: new Date(),
+        })
+      }
+
+      await tx.insert(paymentSchedules).values(scheduleRows)
+      return { client, loan }
+    })
+  }
+
   async getLoanById(loanId: string) {
     const [loan] = await db.select().from(loans).where(eq(loans.id, loanId)).limit(1)
     return loan ?? null
@@ -448,24 +579,27 @@ export class AdminRepository {
   }
 
   async getFundingSummary() {
-    const [fundingRow] = await db
-      .select({
-        totalDeposits: sql<string>`COALESCE(SUM(CASE WHEN ${fundingTransactions.transactionType} = 'DEPOSIT' THEN ${fundingTransactions.amount} ELSE 0 END),0)`,
-        totalWithdrawals: sql<string>`COALESCE(SUM(CASE WHEN ${fundingTransactions.transactionType} = 'WITHDRAWAL' THEN ${fundingTransactions.amount} ELSE 0 END),0)`,
-      })
-      .from(fundingTransactions)
-
-    const [collectionsRow] = await db
-      .select({
-        totalCollections: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
-      })
-      .from(payments)
-
-    const [disbursedRow] = await db
-      .select({
-        totalDisbursed: sql<string>`COALESCE(SUM(${loans.principalAmount}),0)`,
-      })
-      .from(loans)
+    const [fundingRows, collectionsRows, disbursedRows] = await Promise.all([
+      db
+        .select({
+          totalDeposits: sql<string>`COALESCE(SUM(CASE WHEN ${fundingTransactions.transactionType} = 'DEPOSIT' THEN ${fundingTransactions.amount} ELSE 0 END),0)`,
+          totalWithdrawals: sql<string>`COALESCE(SUM(CASE WHEN ${fundingTransactions.transactionType} = 'WITHDRAWAL' THEN ${fundingTransactions.amount} ELSE 0 END),0)`,
+        })
+        .from(fundingTransactions),
+      db
+        .select({
+          totalCollections: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
+        })
+        .from(payments),
+      db
+        .select({
+          totalDisbursed: sql<string>`COALESCE(SUM(${loans.principalAmount}),0)`,
+        })
+        .from(loans),
+    ])
+    const [fundingRow] = fundingRows
+    const [collectionsRow] = collectionsRows
+    const [disbursedRow] = disbursedRows
 
     const deposits = Number(fundingRow?.totalDeposits ?? "0")
     const withdrawals = Number(fundingRow?.totalWithdrawals ?? "0")
@@ -485,39 +619,45 @@ export class AdminRepository {
   }
 
   async getDashboardSummary() {
-    const [activeLoansRow] = await db
-      .select({
-        activeLoans: sql<number>`COUNT(DISTINCT ${loans.id})`,
-      })
-      .from(loans)
-      .innerJoin(clients, eq(loans.clientId, clients.id))
-      .where(and(eq(loans.status, "ACTIVE"), eq(clients.isActive, true)))
-    const [activeMembersRow] = await db
-      .select({
-        activeMembers: count(),
-      })
-      .from(clients)
-      .where(eq(clients.isActive, true))
-    const [overdueRow] = await db
-      .select({
-        overduePayments: count(),
-      })
-      .from(paymentSchedules)
-      .innerJoin(loans, eq(paymentSchedules.loanId, loans.id))
-      .innerJoin(clients, eq(loans.clientId, clients.id))
-      .where(
-        and(
-          eq(paymentSchedules.isPaid, false),
-          sql`${paymentSchedules.dueDate} < NOW()`,
-          eq(clients.isActive, true),
+    const [activeLoansRows, activeMembersRows, overdueRows, paymentsRows, funding] = await Promise.all([
+      db
+        .select({
+          activeLoans: sql<number>`COUNT(DISTINCT ${loans.id})`,
+        })
+        .from(loans)
+        .innerJoin(clients, eq(loans.clientId, clients.id))
+        .where(and(eq(loans.status, "ACTIVE"), eq(clients.isActive, true))),
+      db
+        .select({
+          activeMembers: count(),
+        })
+        .from(clients)
+        .where(eq(clients.isActive, true)),
+      db
+        .select({
+          overduePayments: count(),
+        })
+        .from(paymentSchedules)
+        .innerJoin(loans, eq(paymentSchedules.loanId, loans.id))
+        .innerJoin(clients, eq(loans.clientId, clients.id))
+        .where(
+          and(
+            eq(paymentSchedules.isPaid, false),
+            sql`${paymentSchedules.dueDate} < NOW()`,
+            eq(clients.isActive, true),
+          ),
         ),
-      )
-    const [paymentsRow] = await db
-      .select({
-        totalPayments: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
-      })
-      .from(payments)
-    const funding = await this.getFundingSummary()
+      db
+        .select({
+          totalPayments: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
+        })
+        .from(payments),
+      this.getFundingSummary(),
+    ])
+    const [activeLoansRow] = activeLoansRows
+    const [activeMembersRow] = activeMembersRows
+    const [overdueRow] = overdueRows
+    const [paymentsRow] = paymentsRows
 
     return {
       totalPayments: paymentsRow?.totalPayments ?? "0",
@@ -553,6 +693,60 @@ export class AdminRepository {
       .groupBy(bucketExpr)
       .orderBy(bucketExpr)
     return rows
+  }
+
+  async findLoanContextById(loanIdOrPrefix: string) {
+    const normalized = loanIdOrPrefix.trim().replace(/^#/, "")
+    if (!normalized) return null
+
+    const [exactMatch] = await db
+      .select({
+        loan: {
+          id: loans.id,
+          status: loans.status,
+          outstandingBalance: loans.outstandingBalance,
+          totalPaid: loans.totalPaid,
+          totalPayable: loans.totalPayable,
+        },
+        client: {
+          id: clients.id,
+          firstName: clients.firstName,
+          lastName: clients.lastName,
+          contactNumber: clients.contactNumber,
+        },
+      })
+      .from(loans)
+      .leftJoin(clients, eq(loans.clientId, clients.id))
+      .where(eq(loans.id, normalized))
+      .limit(1)
+
+    if (exactMatch) {
+      return exactMatch
+    }
+
+    const [prefixMatch] = await db
+      .select({
+        loan: {
+          id: loans.id,
+          status: loans.status,
+          outstandingBalance: loans.outstandingBalance,
+          totalPaid: loans.totalPaid,
+          totalPayable: loans.totalPayable,
+        },
+        client: {
+          id: clients.id,
+          firstName: clients.firstName,
+          lastName: clients.lastName,
+          contactNumber: clients.contactNumber,
+        },
+      })
+      .from(loans)
+      .leftJoin(clients, eq(loans.clientId, clients.id))
+      .where(ilike(loans.id, `${normalized}%`))
+      .orderBy(desc(loans.createdAt))
+      .limit(1)
+
+    return prefixMatch ?? null
   }
 
   async getDashboardActivity(input: { page: number; pageSize: number }) {

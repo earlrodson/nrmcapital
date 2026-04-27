@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { listLoans, getLoanSchedule } from "@/lib/actions/admin/loans"
+import { getLoanContextById, getLoanSchedule } from "@/lib/actions/admin/loans"
 import { createPayment } from "@/lib/actions/admin/payments"
 import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
 
@@ -52,34 +52,29 @@ export function NewPaymentClient() {
   const loanContextQuery = useQuery({
     queryKey: ["admin", "payment-form", "loan-search", normalizedLoanId],
     queryFn: async () => {
-      const res = await listLoans({ page: 1, pageSize: 20, search: normalizedLoanId })
+      const res = await getLoanContextById(normalizedLoanId)
       if (!res.success) throw new Error(res.error)
-      const candidates = res.data.rows
-      const exactMatch = candidates.find((row) => row.loans?.id === normalizedLoanId)
-      const prefixedMatch = candidates.find((row) =>
-        typeof row.loans?.id === "string" ? row.loans.id.startsWith(normalizedLoanId) : false
-      )
-      return exactMatch ?? prefixedMatch ?? null
+      return res.data
     },
     enabled: Boolean(normalizedLoanId),
   })
 
   const scheduleQuery = useQuery({
-    queryKey: ["admin", "payment-form", "loan-schedule", loanContextQuery.data?.loans?.id],
+    queryKey: ["admin", "payment-form", "loan-schedule", loanContextQuery.data?.loan?.id],
     queryFn: async () => {
-      const loanIdFromQuery = loanContextQuery.data?.loans?.id
+      const loanIdFromQuery = loanContextQuery.data?.loan?.id
       if (!loanIdFromQuery) return []
       const res = await getLoanSchedule(loanIdFromQuery)
       if (!res.success) throw new Error(res.error)
       return res.data
     },
-    enabled: Boolean(loanContextQuery.data?.loans?.id),
+    enabled: Boolean(loanContextQuery.data?.loan?.id),
   })
 
   const context: LoanContext | null = loanContextQuery.data
     ? {
-        loan: loanContextQuery.data.loans,
-        client: loanContextQuery.data.clients ?? null,
+        loan: loanContextQuery.data.loan,
+        client: loanContextQuery.data.client ?? null,
       }
     : null
 
