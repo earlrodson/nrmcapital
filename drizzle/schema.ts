@@ -14,6 +14,7 @@ import {
 export const roleEnum = pgEnum("Role", ["SUPERADMIN", "ADMIN", "CLIENT"])
 export const loanTypeEnum = pgEnum("LoanType", ["FLAT", "DIMINISHING"])
 export const loanStatusEnum = pgEnum("LoanStatus", ["ACTIVE", "COMPLETED", "DEFAULTED"])
+export const applicationStatusEnum = pgEnum("ApplicationStatus", ["PENDING", "APPROVED", "REJECTED"])
 export const paymentFrequencyEnum = pgEnum("PaymentFrequency", ["MONTHLY", "SEMI_MONTHLY", "WEEKLY"])
 export const paymentMethodEnum = pgEnum("PaymentMethod", ["CASH", "GCASH", "BANK_TRANSFER", "OTHER"])
 export const paymentTypeEnum = pgEnum("PaymentType", ["REGULAR", "ADVANCE", "PENALTY"])
@@ -128,6 +129,37 @@ export const loans = pgTable(
     index("loans_client_id_idx").on(table.clientId),
     index("loans_investor_id_idx").on(table.investorId),
     index("loans_status_idx").on(table.status),
+  ],
+)
+
+export const loanApplications = pgTable(
+  "loan_applications",
+  {
+    id: text("id").primaryKey(),
+    applicantUserId: text("applicant_user_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+    applicantEmail: text("applicant_email").notNull(),
+    firstName: text("first_name").notNull(),
+    lastName: text("last_name").notNull(),
+    contactNumber: text("contact_number"),
+    address: text("address"),
+    principalAmount: decimal("principal_amount", { precision: 12, scale: 2 }).notNull(),
+    monthlyInterestRate: decimal("monthly_interest_rate", { precision: 5, scale: 2 }).notNull(),
+    months: integer("months").notNull(),
+    termsPerMonth: integer("terms_per_month").notNull(),
+    paymentFrequency: paymentFrequencyEnum("payment_frequency").notNull(),
+    notes: text("notes"),
+    status: applicationStatusEnum("status").notNull().default("PENDING"),
+    reviewedById: text("reviewed_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+    reviewedAt: timestamp("reviewed_at", { mode: "date", precision: 3 }),
+    rejectionReason: text("rejection_reason"),
+    createdLoanId: text("created_loan_id").references(() => loans.id, { onDelete: "set null", onUpdate: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date", precision: 3 }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", precision: 3 }).notNull(),
+  },
+  (table) => [
+    index("loan_applications_status_created_at_idx").on(table.status, table.createdAt),
+    index("loan_applications_applicant_email_idx").on(table.applicantEmail),
+    index("loan_applications_applicant_user_id_idx").on(table.applicantUserId),
   ],
 )
 

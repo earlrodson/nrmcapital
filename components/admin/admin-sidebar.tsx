@@ -4,6 +4,7 @@ import * as React from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { 
+  ClipboardCheck,
   Briefcase, 
   ChevronRight, 
   CreditCard, 
@@ -65,6 +66,12 @@ const data = {
           url: "/admin/clients/new",
         },
       ],
+    },
+    {
+      title: "Applications",
+      url: "/admin/applications",
+      icon: ClipboardCheck,
+      isActive: false,
     },
     {
       title: "Loans",

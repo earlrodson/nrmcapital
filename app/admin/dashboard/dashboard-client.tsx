@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { AlertCircle, Briefcase, CreditCard, Loader2, Users, Wallet } from "lucide-react"
+import { AlertCircle, Briefcase, ClipboardCheck, CreditCard, Loader2, Users, Wallet } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
@@ -160,7 +160,7 @@ export function DashboardClient() {
         <p className="text-muted-foreground">Here&apos;s what&apos;s happening with your lending platform today.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Link
           href="/admin/payments"
           className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -237,6 +237,22 @@ export function DashboardClient() {
             <CardContent>
               <div className="text-2xl font-bold">{formatCurrencyPHP(summary.cashAvailable)}</div>
               <p className="text-xs text-muted-foreground">Current available funding balance</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link
+          href="/admin/applications?status=pending"
+          className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Card className="transition hover:border-primary/40 hover:bg-muted/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Applications</CardTitle>
+              <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{summary.pendingApplications ?? 0}</div>
+              <p className="text-xs text-muted-foreground">New loan requests awaiting review</p>
             </CardContent>
           </Card>
         </Link>

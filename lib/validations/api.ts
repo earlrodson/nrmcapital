@@ -46,6 +46,31 @@ export const createLoanSchema = z.object({
 
 export const createLoanForNewClientSchema = createLoanSchema.omit({ clientId: true })
 
+export const createLoanApplicationSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  applicantEmail: z.string().email(),
+  contactNumber: z.string().optional(),
+  address: z.string().optional(),
+  principalAmount: z.union([z.number().positive(), z.string().min(1)]),
+  monthlyInterestRate: z.union([z.number().positive(), z.string().min(1)]),
+  months: z.number().int().positive(),
+  termsPerMonth: z.number().int().positive(),
+  paymentFrequency: z.enum(["MONTHLY", "SEMI_MONTHLY", "WEEKLY"]),
+  notes: z.string().optional(),
+})
+
+export const reviewLoanApplicationSchema = z.discriminatedUnion("decision", [
+  z.object({
+    decision: z.literal("APPROVED"),
+    notes: z.string().optional(),
+  }),
+  z.object({
+    decision: z.literal("REJECTED"),
+    rejectionReason: z.string().min(1),
+  }),
+])
+
 export const updateLoanSchema = z.object({
   status: z.enum(["ACTIVE", "COMPLETED", "DEFAULTED"]).optional(),
   disbursementDate: z.coerce.date().nullable().optional(),

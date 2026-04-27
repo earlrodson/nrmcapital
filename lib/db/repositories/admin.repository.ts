@@ -8,6 +8,7 @@ import {
   clients,
   fundingTransactions,
   investors,
+  loanApplications,
   loans,
   paymentSchedules,
   payments,
@@ -350,7 +351,6 @@ export class AdminRepository {
           updatedAt: new Date(),
         })
       }
-
       await tx.insert(paymentSchedules).values(scheduleRows)
       return loan
     })
@@ -450,10 +450,230 @@ export class AdminRepository {
           updatedAt: new Date(),
         })
       }
-
       await tx.insert(paymentSchedules).values(scheduleRows)
       return { client, loan }
     })
+  }
+
+  async createLoanApplication(input: {
+    applicantUserId?: string
+    applicantEmail: string
+    firstName: string
+    lastName: string
+    contactNumber?: string
+    address?: string
+    principalAmount: number | string
+    monthlyInterestRate: number | string
+    months: number
+    termsPerMonth: number
+    paymentFrequency: "MONTHLY" | "SEMI_MONTHLY" | "WEEKLY"
+    notes?: string
+  }) {
+    const [row] = await db
+      .insert(loanApplications)
+      .values({
+        id: randomUUID(),
+        applicantUserId: input.applicantUserId,
+        applicantEmail: input.applicantEmail.trim().toLowerCase(),
+        firstName: input.firstName,
+        lastName: input.lastName,
+        contactNumber: input.contactNumber,
+        address: input.address,
+        principalAmount: moneyToString(input.principalAmount),
+        monthlyInterestRate: moneyToString(input.monthlyInterestRate),
+        months: input.months,
+        termsPerMonth: input.termsPerMonth,
+        paymentFrequency: input.paymentFrequency,
+        notes: input.notes,
+        updatedAt: new Date(),
+      })
+      .returning()
+    return row
+  }
+
+  async listLoanApplications(input: ListInput) {
+    const clauses = []
+    if (input.search) {
+      const searchClause = or(
+        ilike(loanApplications.firstName, `%${input.search}%`),
+        ilike(loanApplications.lastName, `%${input.search}%`),
+        ilike(loanApplications.applicantEmail, `%${input.search}%`),
+      )
+      if (searchClause) clauses.push(searchClause)
+    }
+    if (input.status && input.status !== "all") {
+      if (input.status === "pending") clauses.push(eq(loanApplications.status, "PENDING"))
+      if (input.status === "approved") clauses.push(eq(loanApplications.status, "APPROVED"))
+      if (input.status === "rejected") clauses.push(eq(loanApplications.status, "REJECTED"))
+    }
+    const whereClause = clauses.length ? and(...clauses) : undefined
+
+    const rows = await db
+      .select()
+      .from(loanApplications)
+      .where(whereClause)
+      .orderBy(desc(loanApplications.createdAt))
+      .limit(input.pageSize)
+      .offset((input.page - 1) * input.pageSize)
+    const [totalRow] = await db.select({ total: count() }).from(loanApplications).where(whereClause)
+    return { rows, total: totalRow?.total ?? 0 }
+  }
+
+  async getLoanApplicationById(applicationId: string) {
+    const [row] = await db.select().from(loanApplications).where(eq(loanApplications.id, applicationId)).limit(1)
+    return row ?? null
+  }
+
+  async approveLoanApplication(input: { applicationId: string; reviewedById: string; notes?: string }) {
+    return db.transaction(async (tx) => {
+      const [application] = await tx
+        .select()
+        .from(loanApplications)
+        .where(eq(loanApplications.id, input.applicationId))
+        .limit(1)
+      if (!application) return null
+      if (application.status !== "PENDING") {
+        throw new Error("VALIDATION_ERROR: Application is already reviewed.")
+      }
+
+      const normalizedEmail = application.applicantEmail.trim().toLowerCase()
+      const [matchedUser] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, normalizedEmail))
+        .limit(1)
+
+      let clientId: string | null = null
+      if (matchedUser?.id) {
+        const [existingClient] = await tx
+          .select({ id: clients.id })
+          .from(clients)
+          .where(eq(clients.userId, matchedUser.id))
+          .limit(1)
+        if (existingClient) {
+          clientId = existingClient.id
+        } else {
+          const [createdClient] = await tx
+            .insert(clients)
+            .values({
+              id: randomUUID(),
+              userId: matchedUser.id,
+              firstName: application.firstName,
+              lastName: application.lastName,
+              contactNumber: application.contactNumber,
+              address: application.address,
+              notes: application.notes ?? null,
+              isActive: true,
+              updatedAt: new Date(),
+            })
+            .returning({ id: clients.id })
+          clientId = createdClient?.id ?? null
+        }
+      } else {
+        const [createdClient] = await tx
+          .insert(clients)
+          .values({
+            id: randomUUID(),
+            firstName: application.firstName,
+            lastName: application.lastName,
+            contactNumber: application.contactNumber,
+            address: application.address,
+            notes: application.notes ?? null,
+            isActive: true,
+            updatedAt: new Date(),
+          })
+          .returning({ id: clients.id })
+        clientId = createdClient?.id ?? null
+      }
+      if (!clientId) {
+        throw new Error("VALIDATION_ERROR: Failed to resolve client for application.")
+      }
+
+      const loanDate = new Date()
+      const calculations = calculateLoanTerms({
+        principalAmount: application.principalAmount,
+        monthlyInterestRate: application.monthlyInterestRate,
+        months: application.months,
+        termsPerMonth: application.termsPerMonth,
+        loanDate,
+      })
+      const [loan] = await tx
+        .insert(loans)
+        .values({
+          id: randomUUID(),
+          clientId,
+          loanType: "FLAT",
+          principalAmount: calculations.principalAmount,
+          monthlyInterestRate: calculations.monthlyInterestRate,
+          months: application.months,
+          termsPerMonth: application.termsPerMonth,
+          totalTerms: calculations.totalTerms,
+          paymentFrequency: application.paymentFrequency,
+          estimatedInterest: calculations.estimatedInterest,
+          totalInterest: calculations.estimatedInterest,
+          totalPayable: calculations.totalPayable,
+          amortizationAmount: calculations.amortizationAmount,
+          loanDate,
+          expectedEndDate: calculations.expectedEndDate,
+          outstandingBalance: calculations.totalPayable,
+          createdById: input.reviewedById,
+          notes: input.notes ?? application.notes ?? undefined,
+          updatedAt: new Date(),
+        })
+        .returning()
+
+      const scheduleRows = []
+      for (let i = 1; i <= calculations.totalTerms; i += 1) {
+        const dueDate = new Date(loanDate)
+        dueDate.setDate(dueDate.getDate() + Math.floor((30 / application.termsPerMonth) * i))
+        scheduleRows.push({
+          id: randomUUID(),
+          loanId: loan.id,
+          termNumber: i,
+          dueDate,
+          amountDue: calculations.amortizationAmount,
+          principalDue: calculations.principalPerTerm,
+          interestDue: calculations.interestPerTerm,
+          updatedAt: new Date(),
+        })
+      }
+      await tx.insert(paymentSchedules).values(scheduleRows)
+
+      const [updatedApplication] = await tx
+        .update(loanApplications)
+        .set({
+          status: "APPROVED",
+          reviewedById: input.reviewedById,
+          reviewedAt: new Date(),
+          rejectionReason: null,
+          createdLoanId: loan.id,
+          notes: input.notes ?? application.notes ?? null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(loanApplications.id, input.applicationId), eq(loanApplications.status, "PENDING")))
+        .returning()
+
+      if (!updatedApplication) {
+        throw new Error("VALIDATION_ERROR: Application was already processed.")
+      }
+
+      return { application: updatedApplication, loan, clientId }
+    })
+  }
+
+  async rejectLoanApplication(input: { applicationId: string; reviewedById: string; rejectionReason: string }) {
+    const [updated] = await db
+      .update(loanApplications)
+      .set({
+        status: "REJECTED",
+        reviewedById: input.reviewedById,
+        reviewedAt: new Date(),
+        rejectionReason: input.rejectionReason,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(loanApplications.id, input.applicationId), eq(loanApplications.status, "PENDING")))
+      .returning()
+    return updated ?? null
   }
 
   async getLoanById(loanId: string) {
@@ -619,7 +839,7 @@ export class AdminRepository {
   }
 
   async getDashboardSummary() {
-    const [activeLoansRows, activeMembersRows, overdueRows, paymentsRows, funding] = await Promise.all([
+    const [activeLoansRows, activeMembersRows, overdueRows, paymentsRows, pendingApplicationsRows, funding] = await Promise.all([
       db
         .select({
           activeLoans: sql<number>`COUNT(DISTINCT ${loans.id})`,
@@ -652,18 +872,26 @@ export class AdminRepository {
           totalPayments: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
         })
         .from(payments),
+      db
+        .select({
+          pendingApplications: count(),
+        })
+        .from(loanApplications)
+        .where(eq(loanApplications.status, "PENDING")),
       this.getFundingSummary(),
     ])
     const [activeLoansRow] = activeLoansRows
     const [activeMembersRow] = activeMembersRows
     const [overdueRow] = overdueRows
     const [paymentsRow] = paymentsRows
+    const [pendingApplicationsRow] = pendingApplicationsRows
 
     return {
       totalPayments: paymentsRow?.totalPayments ?? "0",
       activeLoans: activeLoansRow?.activeLoans ?? 0,
       activeMembers: activeMembersRow?.activeMembers ?? 0,
       overduePayments: overdueRow?.overduePayments ?? 0,
+      pendingApplications: pendingApplicationsRow?.pendingApplications ?? 0,
       cashAvailable: funding.cashAvailable,
       availableFunding: funding.cashAvailable,
     }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { ArrowLeft, Calculator } from "lucide-react"
 import { CONFIG } from "@/lib/config"
 
@@ -215,13 +216,21 @@ export function LoanEstimator() {
             Estimates are for reference only. Final approval remains subject to NRM credit evaluation.
           </p>
 
-          <button
-            onClick={() => setStep(1)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white/50 px-4 py-3.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-900 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 active:scale-[0.98]"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Recalculate
-          </button>
+          <div className="space-y-3">
+            <Link
+              href={`/apply?principal=${principal}&months=${term}&paymentFrequency=${frequency}&monthlyInterestRate=${estimate.monthlyRate}`}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg transition-all hover:bg-emerald-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:scale-[0.98]"
+            >
+              Apply Now
+            </Link>
+            <button
+              onClick={() => setStep(1)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white/50 px-4 py-3.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-900 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 active:scale-[0.98]"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Recalculate
+            </button>
+          </div>
         </div>
       )}
     </section>
