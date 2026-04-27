@@ -175,7 +175,7 @@ export class AdminRepository {
   }
 
   async listLoans(input: ListInput) {
-    const clauses = []
+    const clauses = [eq(clients.isActive, true)]
     const overdueClause = sql<boolean>`EXISTS (
       SELECT 1
       FROM payment_schedules ps
@@ -490,7 +490,8 @@ export class AdminRepository {
         activeLoans: sql<number>`COUNT(DISTINCT ${loans.id})`,
       })
       .from(loans)
-      .where(eq(loans.status, "ACTIVE"))
+      .innerJoin(clients, eq(loans.clientId, clients.id))
+      .where(and(eq(loans.status, "ACTIVE"), eq(clients.isActive, true)))
     const [activeMembersRow] = await db
       .select({
         activeMembers: count(),
@@ -502,7 +503,15 @@ export class AdminRepository {
         overduePayments: count(),
       })
       .from(paymentSchedules)
-      .where(and(eq(paymentSchedules.isPaid, false), sql`${paymentSchedules.dueDate} < NOW()`))
+      .innerJoin(loans, eq(paymentSchedules.loanId, loans.id))
+      .innerJoin(clients, eq(loans.clientId, clients.id))
+      .where(
+        and(
+          eq(paymentSchedules.isPaid, false),
+          sql`${paymentSchedules.dueDate} < NOW()`,
+          eq(clients.isActive, true),
+        ),
+      )
     const [paymentsRow] = await db
       .select({
         totalPayments: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
@@ -605,7 +614,7 @@ export class AdminRepository {
       .from(paymentSchedules)
       .innerJoin(loans, eq(paymentSchedules.loanId, loans.id))
       .innerJoin(clients, eq(loans.clientId, clients.id))
-      .where(and(eq(paymentSchedules.isPaid, false), sql`${paymentSchedules.dueDate} < NOW()`))
+      .where(and(eq(paymentSchedules.isPaid, false), sql`${paymentSchedules.dueDate} < NOW()`, eq(clients.isActive, true)))
       .groupBy(loans.id, clients.id, clients.firstName, clients.lastName)
       .orderBy(desc(sql`COALESCE(DATE_PART('day', NOW() - MIN(${paymentSchedules.dueDate})), 0)`))
       .limit(limit)
