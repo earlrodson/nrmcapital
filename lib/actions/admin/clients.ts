@@ -2,7 +2,13 @@
 
 import { adminRepository } from "@/lib/db/repositories/admin.repository"
 import { requireActionRole, withActionError } from "@/lib/actions/utils"
-import { createClientSchema, updateClientSchema } from "@/lib/validations/api"
+import {
+  createClientAttachmentSchema,
+  createClientAttachmentsBatchSchema,
+  createClientSchema,
+  createLoanForNewClientSchema,
+  updateClientSchema,
+} from "@/lib/validations/api"
 import { z } from "zod"
 
 export async function listClients(params: { page: number; pageSize: number; search?: string | null; status?: string | null }) {
@@ -39,6 +45,38 @@ export async function createClient(input: z.infer<typeof createClientSchema>) {
       payload: row,
     })
     return row
+  })
+}
+
+export async function createClientWithLoan(input: {
+  client: z.infer<typeof createClientSchema>
+  loan: z.infer<typeof createLoanForNewClientSchema>
+}) {
+  return withActionError(async () => {
+    const user = await requireActionRole(["ADMIN", "SUPERADMIN"])
+    const client = createClientSchema.parse(input.client)
+    const loan = createLoanForNewClientSchema.parse(input.loan)
+    const result = await adminRepository.createClientWithLoan({
+      client,
+      loan,
+    })
+    await Promise.all([
+      adminRepository.createAuditLog({
+        userId: user.userId,
+        action: "CREATE",
+        entity: "CLIENT",
+        entityId: result.client.id,
+        payload: result.client,
+      }),
+      adminRepository.createAuditLog({
+        userId: user.userId,
+        action: "CREATE",
+        entity: "LOAN",
+        entityId: result.loan.id,
+        payload: result.loan,
+      }),
+    ])
+    return result
   })
 }
 
@@ -117,6 +155,23 @@ export async function createClientAttachment(input: {
 }) {
   return withActionError(async () => {
     await requireActionRole(["ADMIN", "SUPERADMIN"])
-    return adminRepository.createAttachment(input)
+    const data = createClientAttachmentSchema.parse(input)
+    return adminRepository.createAttachment(data)
+  })
+}
+
+export async function createClientAttachmentsBatch(
+  input: Array<{
+    clientId: string
+    uploadedById: string
+    storageKey: string
+    type?: "GOV_ID" | "PROOF_OF_INCOME" | "PROOF_OF_BILLING" | "CONTRACT" | "OTHER"
+    fileName?: string
+  }>,
+) {
+  return withActionError(async () => {
+    await requireActionRole(["ADMIN", "SUPERADMIN"])
+    const data = createClientAttachmentsBatchSchema.parse(input)
+    return adminRepository.createAttachmentsBatch(data)
   })
 }

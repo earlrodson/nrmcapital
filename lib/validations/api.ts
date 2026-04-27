@@ -19,6 +19,16 @@ export const createClientSchema = z.object({
 
 export const updateClientSchema = createClientSchema.partial()
 
+export const createClientAttachmentSchema = z.object({
+  clientId: z.string().min(1),
+  uploadedById: z.string().min(1),
+  storageKey: z.string().min(1),
+  type: z.enum(["GOV_ID", "PROOF_OF_INCOME", "PROOF_OF_BILLING", "CONTRACT", "OTHER"]).optional(),
+  fileName: z.string().optional(),
+})
+
+export const createClientAttachmentsBatchSchema = z.array(createClientAttachmentSchema).max(50)
+
 export const createLoanSchema = z.object({
   clientId: z.string().min(1),
   investorId: z.string().optional(),
@@ -33,6 +43,8 @@ export const createLoanSchema = z.object({
   createdById: z.string().min(1),
   notes: z.string().optional(),
 })
+
+export const createLoanForNewClientSchema = createLoanSchema.omit({ clientId: true })
 
 export const updateLoanSchema = z.object({
   status: z.enum(["ACTIVE", "COMPLETED", "DEFAULTED"]).optional(),
