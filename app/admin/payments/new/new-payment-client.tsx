@@ -3,12 +3,16 @@
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { listLoans, getLoanSchedule } from "@/lib/actions/admin/loans"
+import { createPayment } from "@/lib/actions/admin/payments"
+import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
 
 interface LoanContext {
   loan: {
@@ -26,28 +30,12 @@ interface LoanContext {
   } | null
 }
 
-interface PaymentScheduleRow {
-  id: string
-  termNumber: number
-  dueDate: string
-  amountDue: string
-  isPaid: boolean
-}
-
-function formatCurrency(value: string) {
-  const amount = Number(value || "0")
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
-
 export function NewPaymentClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
   const initialLoanId = searchParams.get("loanId") ?? ""
+  const returnToParam = searchParams.get("returnTo")
   const [loanId, setLoanId] = React.useState(initialLoanId)
   const [amount, setAmount] = React.useState("")
   const [paymentType, setPaymentType] = React.useState<"REGULAR" | "ADVANCE" | "PENALTY">("REGULAR")
@@ -56,61 +44,58 @@ export function NewPaymentClient() {
   const [penaltyReason, setPenaltyReason] = React.useState("")
   const [notes, setNotes] = React.useState("")
 
-  const [loadingContext, setLoadingContext] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
-  const [context, setContext] = React.useState<LoanContext | null>(null)
-  const [scheduleRows, setScheduleRows] = React.useState<PaymentScheduleRow[]>([])
   const [error, setError] = React.useState<string | null>(null)
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null)
 
-  React.useEffect(() => {
-    async function loadLoanContext() {
-      const normalizedLoanId = loanId.trim().replace(/^#/, "")
-      if (!normalizedLoanId) {
-        setContext(null)
-        setScheduleRows([])
-        return
+  const normalizedLoanId = loanId.trim().replace(/^#/, "")
+  const loanContextQuery = useQuery({
+    queryKey: ["admin", "payment-form", "loan-search", normalizedLoanId],
+    queryFn: async () => {
+      const res = await listLoans({ page: 1, pageSize: 20, search: normalizedLoanId })
+      if (!res.success) throw new Error(res.error)
+      const candidates = res.data.rows
+      const exactMatch = candidates.find((row) => row.loans?.id === normalizedLoanId)
+      const prefixedMatch = candidates.find((row) =>
+        typeof row.loans?.id === "string" ? row.loans.id.startsWith(normalizedLoanId) : false
+      )
+      return exactMatch ?? prefixedMatch ?? null
+    },
+    enabled: Boolean(normalizedLoanId),
+  })
+
+  const scheduleQuery = useQuery({
+    queryKey: ["admin", "payment-form", "loan-schedule", loanContextQuery.data?.loans?.id],
+    queryFn: async () => {
+      const loanIdFromQuery = loanContextQuery.data?.loans?.id
+      if (!loanIdFromQuery) return []
+      const res = await getLoanSchedule(loanIdFromQuery)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    enabled: Boolean(loanContextQuery.data?.loans?.id),
+  })
+
+  const context: LoanContext | null = loanContextQuery.data
+    ? {
+        loan: loanContextQuery.data.loans,
+        client: loanContextQuery.data.clients ?? null,
       }
+    : null
 
-      setLoadingContext(true)
-      setError(null)
-      try {
-        const loansRes = await fetch(`/api/admin/loans?search=${encodeURIComponent(normalizedLoanId)}&page=1&pageSize=20`)
-        const loansPayload = await loansRes.json()
+  const contextError =
+    !normalizedLoanId
+      ? null
+      : loanContextQuery.isError
+        ? "Failed to load loan context."
+        : loanContextQuery.isFetched && !loanContextQuery.isLoading && !loanContextQuery.data
+          ? "Loan not found. Verify the loan ID and try again."
+          : null
 
-        const candidates = Array.isArray(loansPayload.data) ? loansPayload.data : []
-        const exactMatch = candidates.find((row: { loans?: { id?: string } }) => row.loans?.id === normalizedLoanId)
-        const prefixedMatch = candidates.find((row: { loans?: { id?: string } }) =>
-          typeof row.loans?.id === "string" ? row.loans.id.startsWith(normalizedLoanId) : false
-        )
-        const matchedRow = exactMatch ?? prefixedMatch ?? null
-
-        if (!matchedRow) {
-          setContext(null)
-          setScheduleRows([])
-          setError("Loan not found. Verify the loan ID and try again.")
-          return
-        }
-
-        const resolvedLoanId = matchedRow.loans.id
-        setContext({
-          loan: matchedRow.loans,
-          client: matchedRow.clients ?? null,
-        })
-
-        const scheduleRes = await fetch(`/api/admin/loans/${resolvedLoanId}/schedule`)
-        const schedulePayload = await scheduleRes.json()
-        const schedules = Array.isArray(schedulePayload.data) ? schedulePayload.data : []
-        setScheduleRows(schedules)
-      } catch {
-        setError("Failed to load loan context.")
-      } finally {
-        setLoadingContext(false)
-      }
-    }
-
-    void loadLoanContext()
-  }, [loanId])
+  const redirectTo =
+    returnToParam && returnToParam.startsWith("/") && !returnToParam.startsWith("//")
+      ? returnToParam
+      : "/admin/loans"
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -133,29 +118,23 @@ export function NewPaymentClient() {
 
     setSubmitting(true)
     try {
-      const response = await fetch("/api/admin/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          loanId: context.loan.id,
-          amount: amount.trim(),
-          paymentType,
-          paymentMethod,
-          paymentScheduleId: paymentScheduleId || undefined,
-          penaltyReason: paymentType === "PENALTY" ? penaltyReason.trim() : undefined,
-          notes: notes.trim() || undefined,
-        }),
+      const payload = await createPayment({
+        loanId: context.loan.id,
+        amount: amount.trim(),
+        paymentType,
+        paymentMethod,
+        paymentScheduleId: paymentScheduleId || undefined,
+        penaltyReason: paymentType === "PENALTY" ? penaltyReason.trim() : undefined,
+        notes: notes.trim() || undefined,
       })
-
-      const payload = await response.json()
       if (!payload.success) {
-        setError(payload.error?.message || "Failed to record payment.")
+        setError(payload.error || "Failed to record payment.")
         return
       }
 
       setSuccessMessage("Payment recorded successfully. Redirecting to loans...")
       setTimeout(() => {
-        router.push("/admin/loans")
+        router.push(redirectTo)
       }, 900)
     } catch {
       setError("Something went wrong while recording payment.")
@@ -164,6 +143,8 @@ export function NewPaymentClient() {
     }
   }
 
+  const loadingContext = loanContextQuery.isLoading || scheduleQuery.isLoading
+  const scheduleRows = scheduleQuery.data ?? []
   const unpaidTerms = scheduleRows.filter((row) => !row.isPaid)
 
   return (
@@ -212,15 +193,15 @@ export function NewPaymentClient() {
               <div className="grid gap-3 sm:grid-cols-3 text-sm">
                 <div>
                   <p className="text-muted-foreground text-xs">Outstanding</p>
-                  <p className="font-semibold">{formatCurrency(context.loan.outstandingBalance)}</p>
+                  <p className="font-semibold">{formatCurrencyPHP(context.loan.outstandingBalance)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Paid</p>
-                  <p className="font-semibold">{formatCurrency(context.loan.totalPaid)}</p>
+                  <p className="font-semibold">{formatCurrencyPHP(context.loan.totalPaid)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Payable</p>
-                  <p className="font-semibold">{formatCurrency(context.loan.totalPayable)}</p>
+                  <p className="font-semibold">{formatCurrencyPHP(context.loan.totalPayable)}</p>
                 </div>
               </div>
             </div>
@@ -287,7 +268,7 @@ export function NewPaymentClient() {
                   <option value="">No specific term</option>
                   {unpaidTerms.map((term) => (
                     <option key={term.id} value={term.id}>
-                      Term {term.termNumber} - {new Date(term.dueDate).toLocaleDateString()} ({formatCurrency(term.amountDue)})
+                      Term {term.termNumber} - {formatDate(term.dueDate)} ({formatCurrencyPHP(term.amountDue)})
                     </option>
                   ))}
                 </select>
@@ -319,6 +300,7 @@ export function NewPaymentClient() {
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
+            {contextError && <p className="text-sm text-destructive">{contextError}</p>}
             {successMessage && <p className="text-sm text-green-600 dark:text-green-400">{successMessage}</p>}
 
             <div className="flex items-center gap-2">
@@ -329,7 +311,7 @@ export function NewPaymentClient() {
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Record Payment
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.push("/admin/loans")} disabled={submitting}>
+              <Button type="button" variant="outline" onClick={() => router.push(redirectTo)} disabled={submitting}>
                 Cancel
               </Button>
             </div>

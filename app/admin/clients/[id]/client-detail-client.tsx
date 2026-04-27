@@ -22,6 +22,15 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  getClientById,
+  listClientAttachments,
+  listClientLoans,
+  updateClient,
+} from "@/lib/actions/admin/clients"
+import { getLoanSchedule } from "@/lib/actions/admin/loans"
+import { formatAmount, formatDate } from "@/lib/presentation/formatters"
+import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 
 interface ClientDetailProps {
   clientId: string
@@ -36,7 +45,7 @@ interface ClientData {
   idType: string | null
   idNumber: string | null
   isActive: boolean
-  createdAt: string
+  createdAt: string | Date
 }
 
 interface LoanData {
@@ -45,15 +54,16 @@ interface LoanData {
   principalAmount: string
   outstandingBalance: string
   totalPaid: string
+  totalPayable: string
   months: number
-  loanDate: string
+  loanDate: string | Date
   status: string
 }
 
 interface ScheduleTerm {
   id: string
   termNumber: number
-  dueDate: string
+  dueDate: string | Date
   amountDue: string
   principalDue: string
   interestDue: string
@@ -68,13 +78,6 @@ interface AttachmentData {
   id: string
   fileName: string | null
   type: string
-}
-
-type RepaymentStatus = "UPCOMING" | "DUE" | "PARTIAL" | "OVERDUE" | "PAID"
-
-function formatMoney(value: string | number) {
-  const amount = typeof value === "number" ? value : Number(value || "0")
-  return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function getTermStatus(term: ScheduleTerm): RepaymentStatus {
@@ -121,33 +124,32 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
     async function fetchData() {
       try {
         const [clientRes, loansRes, attachmentsRes] = await Promise.all([
-          fetch(`/api/admin/clients/${clientId}`),
-          fetch(`/api/admin/clients/${clientId}/loans`),
-          fetch(`/api/admin/clients/${clientId}/attachments`)
+          getClientById(clientId),
+          listClientLoans(clientId),
+          listClientAttachments(clientId),
         ])
 
-        const [clientData, loansData, attachmentsData] = await Promise.all([
-          clientRes.json(),
-          loansRes.json(),
-          attachmentsRes.json()
-        ])
-
-        if (!clientData.success) throw new Error("Failed to load client profile")
+        if (!clientRes.success) throw new Error(clientRes.error || "Failed to load client profile")
+        if (!loansRes.success) throw new Error(loansRes.error || "Failed to load client loans")
+        if (!attachmentsRes.success) throw new Error(attachmentsRes.error || "Failed to load attachments")
 
         // Get the most recent loan for detail view
-        const activeLoan = loansData.data?.[0] || null
-        let scheduleData: { success?: boolean; data?: ScheduleTerm[] } = { data: [] }
+        const activeLoan = loansRes.data?.[0] || null
+        let scheduleData: ScheduleTerm[] = []
         
         if (activeLoan) {
-          const scheduleRes = await fetch(`/api/admin/loans/${activeLoan.id}/schedule`)
-          scheduleData = await scheduleRes.json()
+          const scheduleRes = await getLoanSchedule(activeLoan.id)
+          if (!scheduleRes.success) {
+            throw new Error(scheduleRes.error || "Failed to load loan schedule")
+          }
+          scheduleData = Array.isArray(scheduleRes.data) ? scheduleRes.data : []
         }
 
         setData({
-          client: clientData.data,
+          client: clientRes.data,
           loan: activeLoan,
-          schedule: Array.isArray(scheduleData.data) ? scheduleData.data : [],
-          attachments: attachmentsData.data || []
+          schedule: scheduleData,
+          attachments: attachmentsRes.data || [],
         })
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load client data")
@@ -194,21 +196,16 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
     setIsSaving(true)
     setEditError(null)
     try {
-      const response = await fetch(`/api/admin/clients/${clientId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: editForm.firstName.trim(),
-          lastName: editForm.lastName.trim(),
-          contactNumber: editForm.contactNumber.trim() || undefined,
-          address: editForm.address.trim() || undefined,
-          idType: editForm.idType.trim() || undefined,
-          idNumber: editForm.idNumber.trim() || undefined,
-        }),
+      const result = await updateClient(clientId, {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        contactNumber: editForm.contactNumber.trim() || undefined,
+        address: editForm.address.trim() || undefined,
+        idType: editForm.idType.trim() || undefined,
+        idNumber: editForm.idNumber.trim() || undefined,
       })
-      const result = await response.json()
       if (!result.success) {
-        setEditError(result.error?.message || "Failed to update borrower profile.")
+        setEditError(result.error || "Failed to update borrower profile.")
         return
       }
 
@@ -273,7 +270,7 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
           <p className="text-muted-foreground flex items-center gap-2">
             <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">ID: {client.id}</span>
             <span>•</span>
-            <span>Registered on {new Date(client.createdAt).toLocaleDateString()}</span>
+            <span>Registered on {formatDate(client.createdAt)}</span>
           </p>
         </div>
         <div className="flex gap-2">
@@ -281,7 +278,7 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
             Edit Profile
           </Button>
           {loan ? (
-            <Link href={`/admin/payments/new?loanId=${loan.id}`}>
+            <Link href={`/admin/payments/new?loanId=${loan.id}&returnTo=${encodeURIComponent(`/admin/clients/${clientId}`)}`}>
               <Button size="sm">Record Payment</Button>
             </Link>
           ) : (
@@ -467,7 +464,7 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                       Active Loan: {loan.id.split("-")[0]}
                     </CardTitle>
                     <CardDescription>
-                      {loan.loanType} interest • Released on {new Date(loan.loanDate).toLocaleDateString()}
+                      {loan.loanType} interest • Released on {formatDate(loan.loanDate)}
                     </CardDescription>
                   </div>
                   <Badge variant={loan.status === "ACTIVE" ? "default" : "outline"} className="px-3 py-1">
@@ -475,21 +472,21 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                   </Badge>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase text-muted-foreground font-bold">Principal</p>
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground">Principal</p>
                       <p className="text-lg font-bold tracking-tight">₱{loan.principalAmount}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase text-muted-foreground font-bold">Outstanding</p>
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground">Outstanding</p>
                       <p className="text-lg font-bold tracking-tight text-primary">₱{loan.outstandingBalance}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase text-muted-foreground font-bold">Total Paid</p>
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground">Total Paid</p>
                       <p className="text-lg font-bold tracking-tight text-green-600">₱{loan.totalPaid}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase text-muted-foreground font-bold">Duration</p>
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground">Duration</p>
                       <p className="text-lg font-bold tracking-tight">{loan.months} Months</p>
                     </div>
                   </div>
@@ -497,69 +494,91 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
               </Card>
 
               <Card>
-                <CardHeader className="pb-0">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-primary" />
-                    Repayment Schedule
-                  </CardTitle>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-primary" />
+                      Repayment Progress
+                    </CardTitle>
+                    <span className="text-sm font-bold text-primary">
+                      {Math.min(100, Math.round((Number(loan.totalPaid) / Number(loan.totalPayable)) * 100))}%
+                    </span>
+                  </div>
                 </CardHeader>
-                <CardContent className="p-0 mt-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/30">
-                        <TableHead className="w-[80px]">Term</TableHead>
-                        <TableHead>Due Date</TableHead>
-                        <TableHead className="text-right">Amortization</TableHead>
-                        <TableHead className="text-right">Principal</TableHead>
-                        <TableHead className="text-right">Interest</TableHead>
-                        <TableHead className="text-right">Paid</TableHead>
-                        <TableHead className="text-right">Remaining</TableHead>
-                        <TableHead className="text-center">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {schedule.map((term) => {
-                        const status = getTermStatus(term)
-                        const amountDue = Number(term.amountDue || "0")
-                        const amountPaid = Number(term.effectiveAmountPaid ?? term.amountPaid ?? "0")
-                        const remainingAmount = Number(term.effectiveRemainingAmount ?? term.remainingAmount ?? Math.max(0, amountDue - amountPaid))
-                        return (
-                        <TableRow key={term.id} className={status === "PAID" ? "bg-green-50/30 dark:bg-green-950/10" : ""}>
-                          <TableCell className="font-mono text-[10px]">{term.termNumber}</TableCell>
-                          <TableCell className="text-xs font-medium">{new Date(term.dueDate).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right font-semibold">₱{term.amountDue}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">₱{term.principalDue}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">₱{term.interestDue}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">₱{formatMoney(amountPaid)}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">₱{formatMoney(remainingAmount)}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge
-                              variant={status === "PAID" ? "default" : status === "OVERDUE" ? "destructive" : "outline"}
-                              className={
-                                status === "PAID"
-                                  ? "bg-green-600 text-[10px]"
-                                  : status === "PARTIAL"
-                                    ? "border-amber-500 text-amber-600 text-[10px]"
-                                    : status === "DUE"
-                                      ? "border-blue-500 text-blue-600 text-[10px]"
-                                      : status === "UPCOMING"
-                                        ? "text-[10px]"
-                                        : "text-[10px]"
-                              }
-                            >
-                              {status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      )})}
-                    </TableBody>
-                  </Table>
+                <CardContent className="space-y-4">
+                  <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full bg-primary transition-all duration-500 ease-in-out"
+                      style={{ width: `${Math.min(100, (Number(loan.totalPaid) / Number(loan.totalPayable)) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
+                    <div className="space-y-0.5">
+                      <p>Total Repaid</p>
+                      <p className="text-sm text-foreground">₱{formatAmount(loan.totalPaid)}</p>
+                    </div>
+                    <div className="space-y-0.5 text-right">
+                      <p>Remaining Balance</p>
+                      <p className="text-sm text-foreground">₱{formatAmount(loan.outstandingBalance)}</p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </>
           )}
         </div>
       </div>
+
+      {/* Full Width Repayment Schedule */}
+      {loan && (
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-0">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              Repayment Schedule
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 mt-4 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead className="w-[80px]">Term</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead className="text-right">Amortization</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">Principal</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">Interest</TableHead>
+                  <TableHead className="text-right">Paid</TableHead>
+                  <TableHead className="text-right">Remaining</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {schedule.map((term) => {
+                  const status = getTermStatus(term)
+                  const amountDue = Number(term.amountDue || "0")
+                  const amountPaid = Number(term.effectiveAmountPaid ?? term.amountPaid ?? "0")
+                  const remainingAmount = Number(term.effectiveRemainingAmount ?? term.remainingAmount ?? Math.max(0, amountDue - amountPaid))
+                  return (
+                  <TableRow key={term.id} className={status === "PAID" ? "bg-green-50/30 dark:bg-green-950/10" : ""}>
+                    <TableCell className="font-mono text-[10px]">{term.termNumber}</TableCell>
+                    <TableCell className="text-xs font-medium whitespace-nowrap">{formatDate(term.dueDate)}</TableCell>
+                    <TableCell className="text-right font-semibold whitespace-nowrap">₱{term.amountDue}</TableCell>
+                    <TableCell className="text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">₱{term.principalDue}</TableCell>
+                    <TableCell className="text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">₱{term.interestDue}</TableCell>
+                    <TableCell className="text-right text-muted-foreground whitespace-nowrap">₱{formatAmount(amountPaid)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground whitespace-nowrap">₱{formatAmount(remainingAmount)}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge {...getRepaymentStatusBadge(status)}>
+                        {status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                )})}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

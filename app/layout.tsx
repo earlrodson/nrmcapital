@@ -1,7 +1,7 @@
 import { Geist_Mono, Montserrat } from "next/font/google"
 
 import "@/styles/globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
+import { Providers } from "@/components/providers"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils";
 
@@ -24,9 +24,9 @@ export default function RootLayout({
       className={cn("antialiased", fontMono.variable, "font-sans", montserrat.variable)}
     >
       <body>
-        <ThemeProvider>
+        <Providers>
           <TooltipProvider>{children}</TooltipProvider>
-        </ThemeProvider>
+        </Providers>
       </body>
     </html>
   )

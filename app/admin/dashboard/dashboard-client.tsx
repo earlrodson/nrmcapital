@@ -3,69 +3,34 @@
 import * as React from "react"
 import Link from "next/link"
 import { AlertCircle, Briefcase, CreditCard, Loader2, Users } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-
-interface SummaryData {
-  totalPayments: string
-  activeLoans: number
-  activeMembers: number
-  overduePayments: number
-  cashAvailable: string
-}
-
-interface OverviewPoint {
-  bucket: string
-  total: string
-}
+import { formatCurrencyPHP, formatDate, formatDateTime } from "@/lib/presentation/formatters"
+import { 
+  getDashboardSummary, 
+  getDashboardActivity, 
+  getTopOverdueLoans, 
+  getDashboardOverview 
+} from "@/lib/actions/admin/dashboard"
 
 type OverviewGranularity = "day" | "month" | "year"
-
-interface ActivityItem {
-  id: string
-  type: string
-  action: string
-  entityId: string
-  createdAt: string
-  actorName: string | null
-  title: string
-  description: string
-}
-
-interface OverdueLoanItem {
-  loanId: string
-  clientId: string
-  firstName: string
-  lastName: string
-  overdueTerms: number
-  oldestDueDate: string
-  overdueAmount: string
-  daysOverdue: number
-}
-
-function formatCurrency(value: string) {
-  const amount = Number(value || "0")
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
+type OverviewPoint = { bucket: string; total: string }
 
 function overviewLabel(bucket: string, granularity: OverviewGranularity) {
   if (granularity === "year") return bucket
   if (granularity === "day") {
     const parsed = new Date(`${bucket}T00:00:00`)
     if (Number.isNaN(parsed.getTime())) return bucket
-    return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    return formatDate(parsed, { month: "short", day: "numeric" })
   }
 
   const [year, month] = bucket.split("-")
   const parsed = new Date(Number(year), Number(month) - 1, 1)
   if (Number.isNaN(parsed.getTime())) return bucket
-  return parsed.toLocaleDateString(undefined, { month: "short", year: "2-digit" })
+  return formatDate(parsed, { month: "short", year: "2-digit" })
 }
 
 function buildLinePath(data: number[], width: number, height: number, padding: number) {
@@ -99,86 +64,68 @@ function buildPlotPoints(data: number[], width: number, height: number, padding:
 }
 
 export function DashboardClient() {
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState<string | null>(null)
-  const [overviewError, setOverviewError] = React.useState<string | null>(null)
-  const [overviewLoading, setOverviewLoading] = React.useState(false)
-  const [summary, setSummary] = React.useState<SummaryData | null>(null)
-  const [overview, setOverview] = React.useState<OverviewPoint[]>([])
   const [overviewGranularity, setOverviewGranularity] = React.useState<OverviewGranularity>("month")
-  const [activity, setActivity] = React.useState<ActivityItem[]>([])
-  const [topOverdue, setTopOverdue] = React.useState<OverdueLoanItem[]>([])
 
-  React.useEffect(() => {
-    let active = true
-    async function loadDashboard() {
-      setLoading(true)
-      setError(null)
-      try {
-        const [summaryRes, activityRes, overdueRes] = await Promise.all([
-          fetch("/api/admin/dashboard/summary"),
-          fetch("/api/admin/dashboard/activity?limit=10"),
-          fetch("/api/admin/dashboard/overdue-top?limit=5"),
-        ])
+  const summaryQuery = useQuery({
+    queryKey: ["admin", "dashboard", "summary"],
+    queryFn: async () => {
+      const res = await getDashboardSummary()
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    }
+  })
 
-        const [summaryPayload, activityPayload, overduePayload] = await Promise.all([
-          summaryRes.json(),
-          activityRes.json(),
-          overdueRes.json(),
-        ])
+  const activityQuery = useQuery({
+    queryKey: ["admin", "dashboard", "activity", { limit: 10 }],
+    queryFn: async () => {
+      const res = await getDashboardActivity({ limit: 10 })
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    }
+  })
 
-        if (!active) return
-        if (!summaryPayload.success || !activityPayload.success || !overduePayload.success) {
-          setError("Failed to load dashboard data.")
-          return
+  const overdueQuery = useQuery({
+    queryKey: ["admin", "dashboard", "overdue", { limit: 5 }],
+    queryFn: async () => {
+      const res = await getTopOverdueLoans(5)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    }
+  })
+
+  const overviewQuery = useQuery({
+    queryKey: ["admin", "dashboard", "overview", overviewGranularity],
+    queryFn: async () => {
+      const res = await getDashboardOverview(overviewGranularity)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    }
+  })
+
+  const loading = summaryQuery.isLoading || activityQuery.isLoading || overdueQuery.isLoading
+  const error = summaryQuery.error || activityQuery.error || overdueQuery.error
+
+  const summary = summaryQuery.data
+  const activity = activityQuery.data?.rows ?? []
+  const topOverdue = overdueQuery.data ?? []
+  
+  const overview: OverviewPoint[] = Array.isArray(overviewQuery.data)
+    ? overviewQuery.data.flatMap((entry) => {
+        if (
+          entry &&
+          typeof entry === "object" &&
+          "bucket" in entry &&
+          "total" in entry &&
+          typeof entry.bucket === "string" &&
+          typeof entry.total === "string"
+        ) {
+          return [{ bucket: entry.bucket, total: entry.total }]
         }
-
-        setSummary(summaryPayload.data)
-        setActivity(activityPayload.data ?? [])
-        setTopOverdue(overduePayload.data ?? [])
-      } catch {
-        if (!active) return
-        setError("Unable to fetch dashboard data.")
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-
-    void loadDashboard()
-    return () => {
-      active = false
-    }
-  }, [])
-
-  React.useEffect(() => {
-    let active = true
-    async function loadOverview() {
-      setOverviewLoading(true)
-      setOverviewError(null)
-      try {
-        const overviewRes = await fetch(`/api/admin/dashboard/overview?granularity=${overviewGranularity}`)
-        const overviewPayload = await overviewRes.json()
-        if (!active) return
-        if (!overviewPayload.success) {
-          setOverviewError("Failed to load overview data.")
-          setOverview([])
-          return
-        }
-        setOverview(overviewPayload.data ?? [])
-      } catch {
-        if (!active) return
-        setOverviewError("Failed to load overview data.")
-        setOverview([])
-      } finally {
-        if (active) setOverviewLoading(false)
-      }
-    }
-
-    void loadOverview()
-    return () => {
-      active = false
-    }
-  }, [overviewGranularity])
+        return []
+      })
+    : []
+  const overviewLoading = overviewQuery.isLoading
+  const overviewError = overviewQuery.error
 
   const totals = overview.map((entry) => Number(entry.total || "0"))
   const linePath = buildLinePath(totals, 720, 240, 24)
@@ -201,7 +148,7 @@ export function DashboardClient() {
   if (error || !summary) {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-        {error || "Dashboard data is unavailable."}
+        {String(error?.message || "Dashboard data is unavailable.")}
       </div>
     )
   }
@@ -220,7 +167,7 @@ export function DashboardClient() {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summary.totalPayments)}</div>
+            <div className="text-2xl font-bold">{formatCurrencyPHP(summary.totalPayments)}</div>
             <p className="text-xs text-muted-foreground">All recorded payment collections</p>
           </CardContent>
         </Card>
@@ -261,7 +208,7 @@ export function DashboardClient() {
 
       <div className="rounded-lg border bg-muted/30 px-4 py-3">
         <p className="text-xs text-muted-foreground">Cash Available</p>
-        <p className="text-xl font-semibold">{formatCurrency(summary.cashAvailable)}</p>
+        <p className="text-xl font-semibold">{formatCurrencyPHP(summary.cashAvailable)}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -307,7 +254,7 @@ export function DashboardClient() {
                 Loading overview data...
               </div>
             ) : overviewError ? (
-              <p className="text-sm text-destructive">{overviewError}</p>
+              <p className="text-sm text-destructive">{String(overviewError)}</p>
             ) : overview.length === 0 ? (
               <p className="text-sm text-muted-foreground">No overview data available yet.</p>
             ) : (
@@ -320,7 +267,7 @@ export function DashboardClient() {
                     const label = overviewLabel(entry.bucket, overviewGranularity)
                     return (
                       <circle key={entry.bucket} cx={point.x} cy={point.y} r={4} className="fill-primary stroke-background" strokeWidth={2}>
-                        <title>{`${label}: ${formatCurrency(entry.total)}`}</title>
+                        <title>{`${label}: ${formatCurrencyPHP(entry.total)}`}</title>
                       </circle>
                     )
                   })}
@@ -328,7 +275,7 @@ export function DashboardClient() {
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {overview.map((entry) => (
                     <span key={entry.bucket}>
-                      {overviewLabel(entry.bucket, overviewGranularity)}: {formatCurrency(entry.total)}
+                      {overviewLabel(entry.bucket, overviewGranularity)}: {formatCurrencyPHP(entry.total)}
                     </span>
                   ))}
                 </div>
@@ -348,7 +295,7 @@ export function DashboardClient() {
                         </p>
                       </Link>
                       <span className="text-muted-foreground">{item.daysOverdue}d</span>
-                      <span className="font-semibold">{formatCurrency(item.overdueAmount)}</span>
+                      <span className="font-semibold">{formatCurrencyPHP(item.overdueAmount)}</span>
                     </div>
                   ))}
                 </div>
@@ -380,7 +327,7 @@ export function DashboardClient() {
                     </div>
                     <p className="text-xs text-muted-foreground">{event.description || "No details provided."}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {event.actorName || "System"} • {new Date(event.createdAt).toLocaleString()}
+                      {event.actorName || "System"} • {formatDateTime(event.createdAt)}
                     </p>
                   </div>
                 ))}

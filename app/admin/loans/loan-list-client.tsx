@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Eye, Loader2, ReceiptText, Search } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,75 +27,43 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { listLoans, getLoanById, getLoanSchedule, getLoanPayments } from "@/lib/actions/admin/loans"
+import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
+import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 
-interface LoanRow {
+type LoanScheduleItem = {
+  id: string
+  termNumber: number
+  dueDate: string | Date
+  amountDue: string
+  amountPaid?: string
+  remainingAmount?: string
+  effectiveAmountPaid?: string
+  effectiveRemainingAmount?: string
+}
+
+type LoanRow = {
   loans: {
     id: string
+    status: string
     principalAmount: string
-    totalPayable: string
     outstandingBalance: string
-    paymentFrequency: string
-    loanDate: string
-    expectedEndDate: string
-    status: "ACTIVE" | "COMPLETED" | "DEFAULTED"
+    loanDate: string | Date
+    expectedEndDate: string | Date
   }
   clients: {
-    id: string
     firstName: string
     lastName: string
     contactNumber: string | null
   }
 }
 
-interface LoanSchedule {
+type LoanPayment = {
   id: string
-  termNumber: number
-  dueDate: string
-  amountDue: string
-  amountPaid?: string
-  remainingAmount?: string
-  effectiveAmountPaid?: string
-  effectiveRemainingAmount?: string
-  isPaid: boolean
-}
-
-interface LoanPayment {
-  id: string
-  amount: string
-  paymentDate: string
-  paymentType: string
+  paymentDate: string | Date
   paymentMethod: string
+  amount: string
 }
-
-interface LoanDetails {
-  id: string
-  loanType: string
-  monthlyInterestRate: string
-  months: number
-  termsPerMonth: number
-  totalTerms: number
-  totalPayable: string
-  totalPaid: string
-  notes: string | null
-}
-
-interface LoansResponse {
-  success: boolean
-  data: LoanRow[]
-  meta?: {
-    page: number
-    pageSize: number
-    total: number
-    summary?: {
-      totalOutstanding: string
-      activeLoans: number
-      overdueLoans: number
-      collectedThisMonth: string
-    }
-  }
-}
-
-type RepaymentStatus = "UPCOMING" | "DUE" | "PARTIAL" | "OVERDUE" | "PAID"
 
 const STATUS_OPTIONS = [
   { label: "All", value: "all" },
@@ -114,15 +83,6 @@ const SORT_OPTIONS = [
   { label: "End Date (Soonest)", value: "expectedEndDate:asc" },
 ] as const
 
-function formatCurrency(value: string) {
-  const amount = Number(value || "0")
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
-
 function buildQueryString(searchParams: URLSearchParams, updates: Record<string, string | null>) {
   const params = new URLSearchParams(searchParams.toString())
   Object.entries(updates).forEach(([key, value]) => {
@@ -132,7 +92,7 @@ function buildQueryString(searchParams: URLSearchParams, updates: Record<string,
   return params.toString()
 }
 
-function getTermStatus(term: LoanSchedule): RepaymentStatus {
+function getTermStatus(term: LoanScheduleItem): RepaymentStatus {
   const amountDue = Number(term.amountDue || "0")
   const amountPaid = Number(term.effectiveAmountPaid ?? term.amountPaid ?? "0")
   const remaining = Number(term.effectiveRemainingAmount ?? term.remainingAmount ?? Math.max(0, amountDue - amountPaid))
@@ -156,21 +116,13 @@ export function LoanListClient() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const [loading, setLoading] = React.useState(true)
-  const [rows, setRows] = React.useState<LoanRow[]>([])
-  const [meta, setMeta] = React.useState<LoansResponse["meta"]>()
   const [search, setSearch] = React.useState(searchParams.get("search") ?? "")
   const [selectedLoanId, setSelectedLoanId] = React.useState<string | null>(null)
-  const [detailsLoading, setDetailsLoading] = React.useState(false)
-  const [loanDetails, setLoanDetails] = React.useState<LoanDetails | null>(null)
-  const [loanSchedule, setLoanSchedule] = React.useState<LoanSchedule[]>([])
-  const [loanPayments, setLoanPayments] = React.useState<LoanPayment[]>([])
 
   const status = searchParams.get("status") ?? "all"
   const page = Number(searchParams.get("page") ?? "1")
   const sortBy = searchParams.get("sortBy") ?? "createdAt"
   const sortOrder = searchParams.get("sortOrder") ?? "desc"
-  const sortValue = `${sortBy}:${sortOrder}`
   const searchQuery = searchParams.get("search") ?? ""
 
   React.useEffect(() => {
@@ -187,80 +139,71 @@ export function LoanListClient() {
     return () => clearTimeout(timeout)
   }, [pathname, router, search, searchParams])
 
-  React.useEffect(() => {
-    const controller = new AbortController()
-    async function loadLoans() {
-      setLoading(true)
-      try {
-        const query = new URLSearchParams()
-        query.set("page", String(page > 0 ? page : 1))
-        query.set("pageSize", "20")
-        if (status !== "all") query.set("status", status)
-        if (searchQuery) query.set("search", searchQuery)
-        query.set("sortBy", sortBy)
-        query.set("sortOrder", sortOrder)
-
-        const response = await fetch(`/api/admin/loans?${query.toString()}`, { signal: controller.signal })
-        const payload: LoansResponse = await response.json()
-        if (payload.success) {
-          setRows(payload.data)
-          setMeta(payload.meta)
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return
-        console.error("Failed to load loans", error)
-      } finally {
-        setLoading(false)
-      }
+  const loansQuery = useQuery({
+    queryKey: ["admin", "loans", { page, status, searchQuery, sortBy, sortOrder }],
+    queryFn: async () => {
+      const res = await listLoans({
+        page,
+        pageSize: 20,
+        status: status === "all" ? null : status,
+        search: searchQuery,
+        sortBy,
+        sortOrder
+      })
+      if (!res.success) throw new Error(res.error)
+      return res.data
     }
+  })
 
-    loadLoans()
-    return () => controller.abort()
-  }, [page, searchQuery, sortBy, sortOrder, status])
+  const loanDetailQuery = useQuery({
+    queryKey: ["admin", "loans", selectedLoanId],
+    queryFn: async () => {
+      if (!selectedLoanId) return null
+      const res = await getLoanById(selectedLoanId)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    enabled: !!selectedLoanId
+  })
 
-  React.useEffect(() => {
-    if (!selectedLoanId) return
+  const loanScheduleQuery = useQuery({
+    queryKey: ["admin", "loans", selectedLoanId, "schedule"],
+    queryFn: async () => {
+      if (!selectedLoanId) return []
+      const res = await getLoanSchedule(selectedLoanId)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    enabled: !!selectedLoanId
+  })
 
-    let active = true
-    async function loadDetails() {
-      setDetailsLoading(true)
-      try {
-        const [detailRes, scheduleRes, paymentsRes] = await Promise.all([
-          fetch(`/api/admin/loans/${selectedLoanId}`),
-          fetch(`/api/admin/loans/${selectedLoanId}/schedule`),
-          fetch(`/api/admin/loans/${selectedLoanId}/payments`),
-        ])
-        const [detailData, scheduleData, paymentsData] = await Promise.all([
-          detailRes.json(),
-          scheduleRes.json(),
-          paymentsRes.json(),
-        ])
-
-        if (!active) return
-        setLoanDetails(detailData.data ?? null)
-        setLoanSchedule(scheduleData.data ?? [])
-        setLoanPayments(paymentsData.data ?? [])
-      } catch (error) {
-        console.error("Failed to load loan details", error)
-      } finally {
-        if (active) setDetailsLoading(false)
-      }
-    }
-
-    loadDetails()
-    return () => {
-      active = false
-    }
-  }, [selectedLoanId])
+  const loanPaymentsQuery = useQuery({
+    queryKey: ["admin", "loans", selectedLoanId, "payments"],
+    queryFn: async () => {
+      if (!selectedLoanId) return []
+      const res = await getLoanPayments(selectedLoanId)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    enabled: !!selectedLoanId
+  })
 
   function setFilter(values: Record<string, string | null>) {
     const nextQuery = buildQueryString(new URLSearchParams(searchParams.toString()), values)
     router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname)
   }
 
+  const loading = loansQuery.isLoading
+  const rows: LoanRow[] = loansQuery.data?.rows ?? []
+  const meta = loansQuery.data
   const total = meta?.total ?? 0
-  const pageSize = meta?.pageSize ?? 20
+  const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  const detailsLoading = loanDetailQuery.isLoading || loanScheduleQuery.isLoading || loanPaymentsQuery.isLoading
+  const loanDetails = loanDetailQuery.data
+  const loanSchedule: LoanScheduleItem[] = loanScheduleQuery.data ?? []
+  const loanPayments: LoanPayment[] = loanPaymentsQuery.data ?? []
 
   return (
     <div className="space-y-6">
@@ -277,7 +220,7 @@ export function LoanListClient() {
             <CardTitle className="text-sm font-medium">Total Outstanding</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {formatCurrency(meta?.summary?.totalOutstanding ?? "0")}
+            {formatCurrencyPHP(meta?.summary?.totalOutstanding ?? "0")}
           </CardContent>
         </Card>
         <Card>
@@ -297,7 +240,7 @@ export function LoanListClient() {
             <CardTitle className="text-sm font-medium">Collected This Month</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {formatCurrency(meta?.summary?.collectedThisMonth ?? "0")}
+            {formatCurrencyPHP(meta?.summary?.collectedThisMonth ?? "0")}
           </CardContent>
         </Card>
       </div>
@@ -314,7 +257,7 @@ export function LoanListClient() {
         </div>
         <select
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          value={sortValue}
+          value={`${sortBy}:${sortOrder}`}
           onChange={(event) => {
             const [nextSortBy, nextSortOrder] = event.target.value.split(":")
             setFilter({ sortBy: nextSortBy, sortOrder: nextSortOrder, page: "1" })
@@ -384,10 +327,10 @@ export function LoanListClient() {
                       {row.loans.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">{formatCurrency(row.loans.principalAmount)}</TableCell>
-                  <TableCell className="text-right font-semibold">{formatCurrency(row.loans.outstandingBalance)}</TableCell>
-                  <TableCell>{new Date(row.loans.loanDate).toLocaleDateString()}</TableCell>
-                  <TableCell>{new Date(row.loans.expectedEndDate).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right">{formatCurrencyPHP(row.loans.principalAmount)}</TableCell>
+                  <TableCell className="text-right font-semibold">{formatCurrencyPHP(row.loans.outstandingBalance)}</TableCell>
+                  <TableCell>{formatDate(row.loans.loanDate)}</TableCell>
+                  <TableCell>{formatDate(row.loans.expectedEndDate)}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -444,9 +387,6 @@ export function LoanListClient() {
         onOpenChange={(open) => {
           if (!open) {
             setSelectedLoanId(null)
-            setLoanDetails(null)
-            setLoanSchedule([])
-            setLoanPayments([])
           }
         }}
       >
@@ -472,11 +412,11 @@ export function LoanListClient() {
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Payable</p>
-                  <p className="font-medium">{formatCurrency(loanDetails.totalPayable)}</p>
+                  <p className="font-medium">{formatCurrencyPHP(loanDetails.totalPayable)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Paid</p>
-                  <p className="font-medium">{formatCurrency(loanDetails.totalPaid)}</p>
+                  <p className="font-medium">{formatCurrencyPHP(loanDetails.totalPaid)}</p>
                 </div>
               </div>
               <div>
@@ -497,21 +437,10 @@ export function LoanListClient() {
                         return (
                           <TableRow key={term.id}>
                             <TableCell>{term.termNumber}</TableCell>
-                            <TableCell>{new Date(term.dueDate).toLocaleDateString()}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(term.amountDue)}</TableCell>
+                            <TableCell>{formatDate(term.dueDate)}</TableCell>
+                            <TableCell className="text-right">{formatCurrencyPHP(term.amountDue)}</TableCell>
                             <TableCell className="text-right">
-                              <Badge
-                                variant={status === "PAID" ? "default" : status === "OVERDUE" ? "destructive" : "outline"}
-                                className={
-                                  status === "PAID"
-                                    ? "bg-green-600 text-[10px]"
-                                    : status === "PARTIAL"
-                                      ? "border-amber-500 text-amber-600 text-[10px]"
-                                      : status === "DUE"
-                                        ? "border-blue-500 text-blue-600 text-[10px]"
-                                        : "text-[10px]"
-                                }
-                              >
+                              <Badge {...getRepaymentStatusBadge(status)}>
                                 {status}
                               </Badge>
                             </TableCell>
@@ -527,8 +456,8 @@ export function LoanListClient() {
                 <div className="space-y-2">
                   {loanPayments.slice(0, 5).map((payment) => (
                     <div key={payment.id} className="flex items-center justify-between rounded border px-3 py-2 text-xs">
-                      <span>{new Date(payment.paymentDate).toLocaleDateString()} • {payment.paymentMethod}</span>
-                      <span className="font-semibold">{formatCurrency(payment.amount)}</span>
+                      <span>{formatDate(payment.paymentDate)} • {payment.paymentMethod}</span>
+                      <span className="font-semibold">{formatCurrencyPHP(payment.amount)}</span>
                     </div>
                   ))}
                   {loanPayments.length === 0 && (
