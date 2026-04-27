@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { AlertCircle, Briefcase, CreditCard, Loader2, Users } from "lucide-react"
+import { AlertCircle, Briefcase, CreditCard, Loader2, Users, Wallet } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
@@ -160,17 +160,22 @@ export function DashboardClient() {
         <p className="text-muted-foreground">Here&apos;s what&apos;s happening with your lending platform today.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrencyPHP(summary.totalPayments)}</div>
-            <p className="text-xs text-muted-foreground">All recorded payment collections</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <Link
+          href="/admin/payments"
+          className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Card className="transition hover:border-primary/40 hover:bg-muted/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrencyPHP(summary.totalPayments)}</div>
+              <p className="text-xs text-muted-foreground">All recorded payment collections</p>
+            </CardContent>
+          </Card>
+        </Link>
 
         <Link
           href="/admin/loans?status=active"
@@ -204,21 +209,37 @@ export function DashboardClient() {
           </Card>
         </Link>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-destructive">Overdue Payments</CardTitle>
-            <AlertCircle className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{summary.overduePayments}</div>
-            <p className="text-xs text-muted-foreground">Unpaid schedules past due date</p>
-          </CardContent>
-        </Card>
-      </div>
+        <Link
+          href="/admin/loans?status=overdue"
+          className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Card className="transition hover:border-primary/40 hover:bg-muted/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-destructive">Overdue Payments</CardTitle>
+              <AlertCircle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">{summary.overduePayments}</div>
+              <p className="text-xs text-muted-foreground">Unpaid schedules past due date</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-      <div className="rounded-lg border bg-muted/30 px-4 py-3">
-        <p className="text-xs text-muted-foreground">Cash Available</p>
-        <p className="text-xl font-semibold">{formatCurrencyPHP(summary.cashAvailable)}</p>
+        <Link
+          href="/admin/funding"
+          className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Card className="transition hover:border-primary/40 hover:bg-muted/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Cash Available</CardTitle>
+              <Wallet className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrencyPHP(summary.cashAvailable)}</div>
+              <p className="text-xs text-muted-foreground">Current available funding balance</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
