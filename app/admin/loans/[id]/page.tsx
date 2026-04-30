@@ -1,11 +1,10 @@
-import { PlaceholderPage } from "@/components/placeholder-page"
+import { LoanDetailClient } from "./loan-detail-client"
 
-export default function AdminLoanDetailPage() {
-  return (
-    <PlaceholderPage
-      title="Loan Details"
-      route="/admin/loans/[id]"
-      description="Placeholder for loan details, payment schedule, and payment history."
-    />
-  )
+interface AdminLoanDetailPageProps {
+  params: Promise<{ id: string }>
+}
+
+export default async function AdminLoanDetailPage({ params }: AdminLoanDetailPageProps) {
+  const { id } = await params
+  return <LoanDetailClient loanId={id} />
 }

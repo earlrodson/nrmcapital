@@ -761,6 +761,102 @@ export class AdminRepository {
     return db.select().from(payments).where(eq(payments.loanId, loanId)).orderBy(desc(payments.paymentDate))
   }
 
+  async updateLoanPayment(input: {
+    paymentId: string
+    amount: string
+    paymentType: "REGULAR" | "ADVANCE" | "PENALTY"
+    paymentMethod: "CASH" | "GCASH" | "BANK_TRANSFER" | "OTHER"
+    paymentScheduleId?: string | null
+    paymentDate: Date
+    penaltyReason?: string | null
+    notes?: string | null
+  }) {
+    return db.transaction(async (tx) => {
+      const [existingPayment] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, input.paymentId))
+        .limit(1)
+
+      if (!existingPayment) return null
+
+      if (input.paymentScheduleId) {
+        const [schedule] = await tx
+          .select({
+            id: paymentSchedules.id,
+            loanId: paymentSchedules.loanId,
+          })
+          .from(paymentSchedules)
+          .where(eq(paymentSchedules.id, input.paymentScheduleId))
+          .limit(1)
+
+        if (!schedule || schedule.loanId !== existingPayment.loanId) {
+          throw new Error("VALIDATION_ERROR: Payment schedule not found for this loan.")
+        }
+      }
+
+      if (existingPayment.paymentScheduleId) {
+        await tx
+          .update(paymentSchedules)
+          .set({
+            amountPaid: sql`GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount})`,
+            isPaid: sql`GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount}) >= ${paymentSchedules.amountDue}`,
+            paidAt: sql`CASE
+              WHEN GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount}) >= ${paymentSchedules.amountDue}
+              THEN ${paymentSchedules.paidAt}
+              ELSE NULL
+            END`,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentSchedules.id, existingPayment.paymentScheduleId))
+      }
+
+      if (input.paymentScheduleId) {
+        await tx
+          .update(paymentSchedules)
+          .set({
+            amountPaid: sql`${paymentSchedules.amountPaid} + ${input.amount}`,
+            isPaid: sql`(${paymentSchedules.amountPaid} + ${input.amount}) >= ${paymentSchedules.amountDue}`,
+            paidAt: sql`CASE
+              WHEN (${paymentSchedules.amountPaid} + ${input.amount}) >= ${paymentSchedules.amountDue}
+              THEN COALESCE(${paymentSchedules.paidAt}, NOW())
+              ELSE ${paymentSchedules.paidAt}
+            END`,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentSchedules.id, input.paymentScheduleId))
+      }
+
+      await tx
+        .update(loans)
+        .set({
+          totalPaid: sql`GREATEST(0, ${loans.totalPaid} - ${existingPayment.amount} + ${input.amount})`,
+          outstandingBalance: sql`GREATEST(0, ${loans.outstandingBalance} + ${existingPayment.amount} - ${input.amount})`,
+          updatedAt: new Date(),
+        })
+        .where(eq(loans.id, existingPayment.loanId))
+
+      const [updatedPayment] = await tx
+        .update(payments)
+        .set({
+          amount: input.amount,
+          paymentType: input.paymentType,
+          paymentMethod: input.paymentMethod,
+          paymentScheduleId: input.paymentScheduleId ?? null,
+          paymentDate: input.paymentDate,
+          penaltyReason: input.penaltyReason ?? null,
+          notes: input.notes ?? null,
+        })
+        .where(eq(payments.id, input.paymentId))
+        .returning()
+
+      return {
+        before: existingPayment,
+        after: updatedPayment ?? existingPayment,
+      }
+    })
+  }
+
   async listInvestors(input: ListInput) {
     const rows = await db
       .select()
