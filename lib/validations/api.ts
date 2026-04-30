@@ -78,6 +78,11 @@ export const updateLoanSchema = z.object({
   notes: z.string().nullable().optional(),
 })
 
+export const updatePaymentScheduleDueDateSchema = z.object({
+  scheduleId: z.string().min(1),
+  dueDate: z.coerce.date(),
+})
+
 export const createPaymentSchema = z.object({
   loanId: z.string().min(1),
   amount: z.union([z.number().positive(), z.string().min(1)]),

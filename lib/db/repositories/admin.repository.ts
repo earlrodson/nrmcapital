@@ -697,6 +697,55 @@ export class AdminRepository {
     return db.select().from(paymentSchedules).where(eq(paymentSchedules.loanId, loanId)).orderBy(asc(paymentSchedules.termNumber))
   }
 
+  async updateLoanScheduleDueDate(scheduleId: string, dueDate: Date) {
+    const [existing] = await db
+      .select({
+        id: paymentSchedules.id,
+        loanId: paymentSchedules.loanId,
+        termNumber: paymentSchedules.termNumber,
+        dueDate: paymentSchedules.dueDate,
+        isPaid: paymentSchedules.isPaid,
+      })
+      .from(paymentSchedules)
+      .where(eq(paymentSchedules.id, scheduleId))
+      .limit(1)
+
+    if (!existing) {
+      return null
+    }
+    if (existing.isPaid) {
+      throw new Error("VALIDATION_ERROR: Paid schedule terms cannot be edited.")
+    }
+
+    const [nextTerm] = await db
+      .select({
+        dueDate: paymentSchedules.dueDate,
+      })
+      .from(paymentSchedules)
+      .where(and(eq(paymentSchedules.loanId, existing.loanId), eq(paymentSchedules.termNumber, existing.termNumber + 1)))
+      .limit(1)
+
+    if (nextTerm && dueDate.getTime() > nextTerm.dueDate.getTime()) {
+      throw new Error("VALIDATION_ERROR: Due date cannot be later than the next schedule term date.")
+    }
+
+    const [updated] = await db
+      .update(paymentSchedules)
+      .set({
+        dueDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentSchedules.id, scheduleId))
+      .returning({
+        id: paymentSchedules.id,
+        loanId: paymentSchedules.loanId,
+        termNumber: paymentSchedules.termNumber,
+        dueDate: paymentSchedules.dueDate,
+        isPaid: paymentSchedules.isPaid,
+      })
+    return updated ?? null
+  }
+
   async listPayments(input: ListInput) {
     const rows = await db
       .select()

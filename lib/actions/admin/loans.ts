@@ -2,7 +2,7 @@
 
 import { adminRepository } from "@/lib/db/repositories/admin.repository"
 import { requireActionRole, withActionError } from "@/lib/actions/utils"
-import { createLoanSchema, updateLoanSchema } from "@/lib/validations/api"
+import { createLoanSchema, updateLoanSchema, updatePaymentScheduleDueDateSchema } from "@/lib/validations/api"
 import { z } from "zod"
 
 export async function listLoans(params: { 
@@ -118,5 +118,27 @@ export async function getLoanPayments(id: string) {
   return withActionError(async () => {
     await requireActionRole(["ADMIN", "SUPERADMIN"])
     return adminRepository.listLoanPayments(id)
+  })
+}
+
+export async function updatePaymentScheduleDueDate(input: z.infer<typeof updatePaymentScheduleDueDateSchema>) {
+  return withActionError(async () => {
+    const user = await requireActionRole(["ADMIN", "SUPERADMIN"])
+    const data = updatePaymentScheduleDueDateSchema.parse(input)
+    const row = await adminRepository.updateLoanScheduleDueDate(data.scheduleId, data.dueDate)
+    if (!row) throw new Error("NOT_FOUND: Payment schedule not found.")
+
+    await adminRepository.createAuditLog({
+      userId: user.userId,
+      action: "UPDATE",
+      entity: "PAYMENT_SCHEDULE",
+      entityId: row.id,
+      payload: {
+        loanId: row.loanId,
+        termNumber: row.termNumber,
+        dueDate: row.dueDate,
+      },
+    })
+    return row
   })
 }

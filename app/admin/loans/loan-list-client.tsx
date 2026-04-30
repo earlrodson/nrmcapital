@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Eye, Loader2, ReceiptText, Search } from "lucide-react"
+import { Eye, Loader2, Pencil, ReceiptText, Search } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 import { Badge } from "@/components/ui/badge"
@@ -26,8 +26,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { listLoans, getLoanById, getLoanSchedule, getLoanPayments } from "@/lib/actions/admin/loans"
+import { listLoans, getLoanById, getLoanSchedule, getLoanPayments, updatePaymentScheduleDueDate } from "@/lib/actions/admin/loans"
 import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
 import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 
@@ -36,6 +37,7 @@ type LoanScheduleItem = {
   termNumber: number
   dueDate: string | Date
   amountDue: string
+  isPaid?: boolean
   amountPaid?: string
   remainingAmount?: string
   effectiveAmountPaid?: string
@@ -111,6 +113,15 @@ function getTermStatus(term: LoanScheduleItem): RepaymentStatus {
   return "UPCOMING"
 }
 
+function toDateInputValue(value: string | Date) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, "0")
+  const day = `${date.getDate()}`.padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export function LoanListClient() {
   const router = useRouter()
   const pathname = usePathname()
@@ -118,6 +129,11 @@ export function LoanListClient() {
 
   const [search, setSearch] = React.useState(searchParams.get("search") ?? "")
   const [selectedLoanId, setSelectedLoanId] = React.useState<string | null>(null)
+  const [selectedScheduleId, setSelectedScheduleId] = React.useState<string | null>(null)
+  const [editedDueDate, setEditedDueDate] = React.useState("")
+  const [maxAllowedDueDate, setMaxAllowedDueDate] = React.useState<string | undefined>(undefined)
+  const [isScheduleSaving, setIsScheduleSaving] = React.useState(false)
+  const [scheduleEditError, setScheduleEditError] = React.useState<string | null>(null)
 
   const status = searchParams.get("status") ?? "all"
   const page = Number(searchParams.get("page") ?? "1")
@@ -204,6 +220,50 @@ export function LoanListClient() {
   const loanDetails = loanDetailQuery.data
   const loanSchedule: LoanScheduleItem[] = loanScheduleQuery.data ?? []
   const loanPayments: LoanPayment[] = loanPaymentsQuery.data ?? []
+
+  const openScheduleEditDialog = (term: LoanScheduleItem) => {
+    const nextTerm = loanSchedule.find((item) => item.termNumber === term.termNumber + 1)
+    setSelectedScheduleId(term.id)
+    setEditedDueDate(toDateInputValue(term.dueDate))
+    setMaxAllowedDueDate(nextTerm ? toDateInputValue(nextTerm.dueDate) : undefined)
+    setScheduleEditError(null)
+  }
+
+  const closeScheduleEditDialog = () => {
+    setSelectedScheduleId(null)
+    setEditedDueDate("")
+    setMaxAllowedDueDate(undefined)
+    setScheduleEditError(null)
+  }
+
+  const handleSaveScheduleDate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!selectedScheduleId) return
+
+    setIsScheduleSaving(true)
+    setScheduleEditError(null)
+    try {
+      if (maxAllowedDueDate && editedDueDate > maxAllowedDueDate) {
+        setScheduleEditError("Due date cannot be later than the next schedule term date.")
+        return
+      }
+
+      const result = await updatePaymentScheduleDueDate({
+        scheduleId: selectedScheduleId,
+        dueDate: new Date(editedDueDate),
+      })
+      if (!result.success) {
+        setScheduleEditError(result.error || "Failed to update due date.")
+        return
+      }
+      await loanScheduleQuery.refetch()
+      closeScheduleEditDialog()
+    } catch {
+      setScheduleEditError("An error occurred while updating due date.")
+    } finally {
+      setIsScheduleSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -429,6 +489,7 @@ export function LoanListClient() {
                         <TableHead>Due Date</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
                         <TableHead className="text-right">Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -443,6 +504,18 @@ export function LoanListClient() {
                               <Badge {...getRepaymentStatusBadge(status)}>
                                 {status}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openScheduleEditDialog(term)}
+                                disabled={Boolean(term.isPaid)}
+                              >
+                                <Pencil className="mr-1 h-3.5 w-3.5" />
+                                Edit
+                              </Button>
                             </TableCell>
                           </TableRow>
                         )
@@ -472,6 +545,42 @@ export function LoanListClient() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelectedLoanId(null)}>Close</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(selectedScheduleId)}
+        onOpenChange={(open) => {
+          if (!open) closeScheduleEditDialog()
+        }}
+      >
+        <DialogContent>
+          <form onSubmit={handleSaveScheduleDate}>
+            <DialogHeader>
+              <DialogTitle>Edit Due Date</DialogTitle>
+              <DialogDescription>Update the selected repayment term due date.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2 py-4">
+              <Label htmlFor="loanScheduleDueDate">Due Date</Label>
+              <Input
+                id="loanScheduleDueDate"
+                type="date"
+                value={editedDueDate}
+                onChange={(event) => setEditedDueDate(event.target.value)}
+                max={maxAllowedDueDate}
+                required
+              />
+            </div>
+            {scheduleEditError ? <p className="text-sm text-destructive">{scheduleEditError}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeScheduleEditDialog} disabled={isScheduleSaving}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isScheduleSaving || !editedDueDate}>
+                {isScheduleSaving ? "Saving..." : "Save Due Date"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

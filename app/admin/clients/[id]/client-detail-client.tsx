@@ -12,7 +12,8 @@ import {
   Clock,
   AlertCircle,
   Loader2,
-  Download
+  Download,
+  Pencil
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -28,7 +29,7 @@ import {
   listClientLoans,
   updateClient,
 } from "@/lib/actions/admin/clients"
-import { getLoanSchedule } from "@/lib/actions/admin/loans"
+import { getLoanSchedule, updatePaymentScheduleDueDate } from "@/lib/actions/admin/loans"
 import { formatAmount, formatDate } from "@/lib/presentation/formatters"
 import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 
@@ -99,6 +100,15 @@ function getTermStatus(term: ScheduleTerm): RepaymentStatus {
   return "UPCOMING"
 }
 
+function toDateInputValue(value: string | Date) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, "0")
+  const day = `${date.getDate()}`.padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export function ClientDetailClient({ clientId }: ClientDetailProps) {
   const [loading, setLoading] = React.useState(true)
   const [data, setData] = React.useState<{
@@ -119,6 +129,12 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
     idType: "",
     idNumber: "",
   })
+  const [isScheduleEditOpen, setIsScheduleEditOpen] = React.useState(false)
+  const [isScheduleSaving, setIsScheduleSaving] = React.useState(false)
+  const [scheduleEditError, setScheduleEditError] = React.useState<string | null>(null)
+  const [selectedScheduleTermId, setSelectedScheduleTermId] = React.useState<string | null>(null)
+  const [editedDueDate, setEditedDueDate] = React.useState("")
+  const [maxAllowedDueDate, setMaxAllowedDueDate] = React.useState<string | undefined>(undefined)
 
   React.useEffect(() => {
     async function fetchData() {
@@ -230,6 +246,53 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
       setEditError("An error occurred while updating borrower profile.")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const openScheduleEditDialog = (term: ScheduleTerm) => {
+    const nextTerm = data?.schedule.find((item) => item.termNumber === term.termNumber + 1)
+    setSelectedScheduleTermId(term.id)
+    setEditedDueDate(toDateInputValue(term.dueDate))
+    setMaxAllowedDueDate(nextTerm ? toDateInputValue(nextTerm.dueDate) : undefined)
+    setScheduleEditError(null)
+    setIsScheduleEditOpen(true)
+  }
+
+  const handleSaveScheduleDate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!selectedScheduleTermId) return
+
+    setIsScheduleSaving(true)
+    setScheduleEditError(null)
+    try {
+      if (maxAllowedDueDate && editedDueDate > maxAllowedDueDate) {
+        setScheduleEditError("Due date cannot be later than the next schedule term date.")
+        return
+      }
+
+      const result = await updatePaymentScheduleDueDate({
+        scheduleId: selectedScheduleTermId,
+        dueDate: new Date(editedDueDate),
+      })
+      if (!result.success) {
+        setScheduleEditError(result.error || "Failed to update due date.")
+        return
+      }
+
+      setData((previous) => {
+        if (!previous) return previous
+        return {
+          ...previous,
+          schedule: previous.schedule.map((term) =>
+            term.id === result.data.id ? { ...term, dueDate: result.data.dueDate } : term,
+          ),
+        }
+      })
+      setIsScheduleEditOpen(false)
+    } catch {
+      setScheduleEditError("An error occurred while updating due date.")
+    } finally {
+      setIsScheduleSaving(false)
     }
   }
 
@@ -368,6 +431,37 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isScheduleEditOpen} onOpenChange={setIsScheduleEditOpen}>
+        <DialogContent>
+          <form onSubmit={handleSaveScheduleDate}>
+            <DialogHeader>
+              <DialogTitle>Edit Due Date</DialogTitle>
+              <DialogDescription>Update the selected repayment term due date.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2 py-4">
+              <Label htmlFor="scheduleDueDate">Due Date</Label>
+              <Input
+                id="scheduleDueDate"
+                type="date"
+                value={editedDueDate}
+                onChange={(event) => setEditedDueDate(event.target.value)}
+                max={maxAllowedDueDate}
+                required
+              />
+            </div>
+            {scheduleEditError ? <p className="text-sm text-destructive">{scheduleEditError}</p> : null}
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setIsScheduleEditOpen(false)} disabled={isScheduleSaving}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isScheduleSaving || !editedDueDate}>
+                {isScheduleSaving ? "Saving..." : "Save Due Date"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Sidebar Info */}
         <div className="space-y-6">
@@ -457,7 +551,7 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
             </Card>
           ) : (
             <>
-              <Card className="bg-primary/[0.02] border-primary/20">
+              <Card className="bg-primary/2 border-primary/20">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div className="space-y-1">
                     <CardTitle className="flex items-center gap-2 uppercase tracking-tighter">
@@ -550,6 +644,7 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                   <TableHead className="text-right">Paid</TableHead>
                   <TableHead className="text-right">Remaining</TableHead>
                   <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -571,6 +666,18 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                       <Badge {...getRepaymentStatusBadge(status)}>
                         {status}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openScheduleEditDialog(term)}
+                        disabled={term.isPaid}
+                      >
+                        <Pencil className="mr-1 h-3.5 w-3.5" />
+                        Edit
+                      </Button>
                     </TableCell>
                   </TableRow>
                 )})}
