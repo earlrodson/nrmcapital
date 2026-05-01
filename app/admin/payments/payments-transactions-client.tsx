@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { listPayments } from "@/lib/actions/admin/payments"
 import { removePayment } from "@/lib/actions/admin/payments"
-import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
+import { formatCurrencyPHPRounded, formatDate } from "@/lib/presentation/formatters"
 
 interface PaymentRow {
   id: string
@@ -127,7 +127,7 @@ export function PaymentsTransactionsClient() {
                       {row.loanId}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-right font-semibold">{formatCurrencyPHP(row.amount)}</TableCell>
+                  <TableCell className="text-right font-semibold">{formatCurrencyPHPRounded(row.amount)}</TableCell>
                   <TableCell>{row.paymentType}</TableCell>
                   <TableCell>{row.paymentMethod}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{row.notes || "—"}</TableCell>

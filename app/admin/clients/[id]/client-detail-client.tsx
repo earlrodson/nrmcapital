@@ -30,7 +30,7 @@ import {
   updateClient,
 } from "@/lib/actions/admin/clients"
 import { getLoanSchedule, updatePaymentScheduleDueDate } from "@/lib/actions/admin/loans"
-import { formatAmount, formatDate } from "@/lib/presentation/formatters"
+import { formatCurrencyPHPRounded, formatDate } from "@/lib/presentation/formatters"
 import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 
 interface ClientDetailProps {
@@ -569,15 +569,15 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                   <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold uppercase text-muted-foreground">Principal</p>
-                      <p className="text-lg font-bold tracking-tight">₱{loan.principalAmount}</p>
+                      <p className="text-lg font-bold tracking-tight">{formatCurrencyPHPRounded(loan.principalAmount)}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold uppercase text-muted-foreground">Outstanding</p>
-                      <p className="text-lg font-bold tracking-tight text-primary">₱{loan.outstandingBalance}</p>
+                      <p className="text-lg font-bold tracking-tight text-primary">{formatCurrencyPHPRounded(loan.outstandingBalance)}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold uppercase text-muted-foreground">Total Paid</p>
-                      <p className="text-lg font-bold tracking-tight text-green-600">₱{loan.totalPaid}</p>
+                      <p className="text-lg font-bold tracking-tight text-green-600">{formatCurrencyPHPRounded(loan.totalPaid)}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold uppercase text-muted-foreground">Duration</p>
@@ -609,11 +609,11 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                   <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
                     <div className="space-y-0.5">
                       <p>Total Repaid</p>
-                      <p className="text-sm text-foreground">₱{formatAmount(loan.totalPaid)}</p>
+                      <p className="text-sm text-foreground">{formatCurrencyPHPRounded(loan.totalPaid)}</p>
                     </div>
                     <div className="space-y-0.5 text-right">
                       <p>Remaining Balance</p>
-                      <p className="text-sm text-foreground">₱{formatAmount(loan.outstandingBalance)}</p>
+                      <p className="text-sm text-foreground">{formatCurrencyPHPRounded(loan.outstandingBalance)}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -657,11 +657,11 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
                   <TableRow key={term.id} className={status === "PAID" ? "bg-green-50/30 dark:bg-green-950/10" : ""}>
                     <TableCell className="font-mono text-[10px]">{term.termNumber}</TableCell>
                     <TableCell className="text-xs font-medium whitespace-nowrap">{formatDate(term.dueDate)}</TableCell>
-                    <TableCell className="text-right font-semibold whitespace-nowrap">₱{term.amountDue}</TableCell>
-                    <TableCell className="text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">₱{term.principalDue}</TableCell>
-                    <TableCell className="text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">₱{term.interestDue}</TableCell>
-                    <TableCell className="text-right text-muted-foreground whitespace-nowrap">₱{formatAmount(amountPaid)}</TableCell>
-                    <TableCell className="text-right text-muted-foreground whitespace-nowrap">₱{formatAmount(remainingAmount)}</TableCell>
+                    <TableCell className="text-right font-semibold whitespace-nowrap">{formatCurrencyPHPRounded(term.amountDue)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">{formatCurrencyPHPRounded(term.principalDue)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">{formatCurrencyPHPRounded(term.interestDue)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground whitespace-nowrap">{formatCurrencyPHPRounded(amountPaid)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground whitespace-nowrap">{formatCurrencyPHPRounded(remainingAmount)}</TableCell>
                     <TableCell className="text-center">
                       <Badge {...getRepaymentStatusBadge(status)}>
                         {status}

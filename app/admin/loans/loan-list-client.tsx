@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { listLoans, getLoanById, getLoanSchedule, getLoanPayments, updatePaymentScheduleDueDate } from "@/lib/actions/admin/loans"
-import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
+import { formatCurrencyPHPRounded, formatDate } from "@/lib/presentation/formatters"
 import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 
 type LoanScheduleItem = {
@@ -280,7 +280,7 @@ export function LoanListClient() {
             <CardTitle className="text-sm font-medium">Total Outstanding</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {formatCurrencyPHP(meta?.summary?.totalOutstanding ?? "0")}
+            {formatCurrencyPHPRounded(meta?.summary?.totalOutstanding ?? "0")}
           </CardContent>
         </Card>
         <Card>
@@ -300,7 +300,7 @@ export function LoanListClient() {
             <CardTitle className="text-sm font-medium">Collected This Month</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {formatCurrencyPHP(meta?.summary?.collectedThisMonth ?? "0")}
+            {formatCurrencyPHPRounded(meta?.summary?.collectedThisMonth ?? "0")}
           </CardContent>
         </Card>
       </div>
@@ -387,8 +387,8 @@ export function LoanListClient() {
                       {row.loans.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">{formatCurrencyPHP(row.loans.principalAmount)}</TableCell>
-                  <TableCell className="text-right font-semibold">{formatCurrencyPHP(row.loans.outstandingBalance)}</TableCell>
+                  <TableCell className="text-right">{formatCurrencyPHPRounded(row.loans.principalAmount)}</TableCell>
+                  <TableCell className="text-right font-semibold">{formatCurrencyPHPRounded(row.loans.outstandingBalance)}</TableCell>
                   <TableCell>{formatDate(row.loans.loanDate)}</TableCell>
                   <TableCell>{formatDate(row.loans.expectedEndDate)}</TableCell>
                   <TableCell className="text-right">
@@ -476,11 +476,11 @@ export function LoanListClient() {
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Payable</p>
-                  <p className="font-medium">{formatCurrencyPHP(loanDetails.totalPayable)}</p>
+                  <p className="font-medium">{formatCurrencyPHPRounded(loanDetails.totalPayable)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Paid</p>
-                  <p className="font-medium">{formatCurrencyPHP(loanDetails.totalPaid)}</p>
+                  <p className="font-medium">{formatCurrencyPHPRounded(loanDetails.totalPaid)}</p>
                 </div>
               </div>
               <div>
@@ -503,7 +503,7 @@ export function LoanListClient() {
                           <TableRow key={term.id}>
                             <TableCell>{term.termNumber}</TableCell>
                             <TableCell>{formatDate(term.dueDate)}</TableCell>
-                            <TableCell className="text-right">{formatCurrencyPHP(term.amountDue)}</TableCell>
+                            <TableCell className="text-right">{formatCurrencyPHPRounded(term.amountDue)}</TableCell>
                             <TableCell className="text-right">
                               <Badge {...getRepaymentStatusBadge(status)}>
                                 {status}
@@ -534,7 +534,7 @@ export function LoanListClient() {
                   {loanPayments.slice(0, 5).map((payment) => (
                     <div key={payment.id} className="flex items-center justify-between rounded border px-3 py-2 text-xs">
                       <span>{formatDate(payment.paymentDate)} • {payment.paymentMethod}</span>
-                      <span className="font-semibold">{formatCurrencyPHP(payment.amount)}</span>
+                      <span className="font-semibold">{formatCurrencyPHPRounded(payment.amount)}</span>
                     </div>
                   ))}
                   {loanPayments.length === 0 && (

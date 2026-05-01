@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { calculateLoanTerms } from "@/lib/domain/loan-calculations"
 import { createClientAttachmentsBatch, createClientWithLoan, getCurrentAdminUser } from "@/lib/actions/admin/clients"
+import { formatCurrencyPHP } from "@/lib/presentation/formatters"
 
 interface AttachmentFile {
   file: File
@@ -407,13 +408,13 @@ export function NewBorrowerClient() {
                   <div className="space-y-4">
                     <div className="flex justify-between items-baseline">
                       <span className="text-xs text-muted-foreground uppercase font-bold tracking-tight">Amortization</span>
-                      <span className="text-2xl font-black text-foreground">₱{calculations.amortizationAmount}</span>
+                      <span className="text-2xl font-black text-foreground">{formatCurrencyPHP(calculations.amortizationAmount)}</span>
                     </div>
                     <div className="h-px bg-border/50 w-full" />
                     <div className="grid grid-cols-2 gap-y-4">
                       <div className="space-y-1">
                         <span className="text-[10px] text-muted-foreground uppercase font-bold block">Interest Total</span>
-                        <span className="text-sm font-semibold">₱{calculations.estimatedInterest}</span>
+                        <span className="text-sm font-semibold">{formatCurrencyPHP(calculations.estimatedInterest)}</span>
                       </div>
                       <div className="space-y-1 text-right">
                         <span className="text-[10px] text-muted-foreground uppercase font-bold block">Total Terms</span>
@@ -425,7 +426,7 @@ export function NewBorrowerClient() {
                       </div>
                       <div className="space-y-1 text-right">
                         <span className="text-[10px] text-muted-foreground uppercase font-bold block">Total Payable</span>
-                        <span className="text-sm font-semibold">₱{calculations.totalPayable}</span>
+                        <span className="text-sm font-semibold">{formatCurrencyPHP(calculations.totalPayable)}</span>
                       </div>
                     </div>
                   </div>
