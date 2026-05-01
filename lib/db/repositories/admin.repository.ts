@@ -10,12 +10,14 @@ import {
   investors,
   loanApplications,
   loans,
+  paymentEvents,
   paymentSchedules,
   payments,
   systemSettings,
   users,
 } from "@/drizzle/schema"
 import { db } from "@/lib/db/client"
+import { paymentEventSnapshotSchema } from "@/lib/domain/payment-events"
 import { calculateLoanTerms } from "@/lib/domain/loan-calculations"
 
 interface ListInput {
@@ -32,6 +34,23 @@ function moneyToString(value: string | number) {
     return value.toFixed(2)
   }
   return value
+}
+
+function toPaymentSnapshot(payment: typeof payments.$inferSelect) {
+  return paymentEventSnapshotSchema.parse({
+    paymentId: payment.id,
+    loanId: payment.loanId,
+    amount: payment.amount,
+    paymentType: payment.paymentType,
+    paymentMethod: payment.paymentMethod,
+    paymentScheduleId: payment.paymentScheduleId ?? null,
+    paymentDate: payment.paymentDate,
+    penaltyReason: payment.penaltyReason ?? null,
+    notes: payment.notes ?? null,
+    deletedAt: payment.deletedAt ?? null,
+    deletedById: payment.deletedById ?? null,
+    deleteReason: payment.deleteReason ?? null,
+  })
 }
 
 export class AdminRepository {
@@ -145,7 +164,7 @@ export class AdminRepository {
       })
       .from(payments)
       .innerJoin(loans, eq(payments.loanId, loans.id))
-      .where(eq(loans.clientId, clientId))
+      .where(and(eq(loans.clientId, clientId), sql`${payments.deletedAt} IS NULL`))
       .orderBy(desc(payments.paymentDate))
   }
 
@@ -272,7 +291,7 @@ export class AdminRepository {
       .from(payments)
       .innerJoin(loans, eq(payments.loanId, loans.id))
       .innerJoin(clients, eq(loans.clientId, clients.id))
-      .where(whereClause)
+      .where(whereClause ? and(whereClause, sql`${payments.deletedAt} IS NULL`) : sql`${payments.deletedAt} IS NULL`)
 
     return {
       rows,
@@ -746,19 +765,216 @@ export class AdminRepository {
     return updated ?? null
   }
 
-  async listPayments(input: ListInput) {
+  async listPayments(input: ListInput & { includeDeleted?: boolean }) {
+    const paymentWhere = input.includeDeleted ? undefined : sql`${payments.deletedAt} IS NULL`
     const rows = await db
       .select()
       .from(payments)
+      .where(paymentWhere)
       .orderBy(desc(payments.paymentDate))
       .limit(input.pageSize)
       .offset((input.page - 1) * input.pageSize)
-    const [totalRow] = await db.select({ total: count() }).from(payments)
+    const [totalRow] = await db.select({ total: count() }).from(payments).where(paymentWhere)
     return { rows, total: totalRow?.total ?? 0 }
   }
 
-  async listLoanPayments(loanId: string) {
-    return db.select().from(payments).where(eq(payments.loanId, loanId)).orderBy(desc(payments.paymentDate))
+  async listLoanPayments(loanId: string, input?: { includeDeleted?: boolean }) {
+    const whereClause = input?.includeDeleted
+      ? eq(payments.loanId, loanId)
+      : and(eq(payments.loanId, loanId), sql`${payments.deletedAt} IS NULL`)
+    return db.select().from(payments).where(whereClause).orderBy(desc(payments.paymentDate))
+  }
+
+  async listPaymentEventsByLoan(loanId: string) {
+    return db.select().from(paymentEvents).where(eq(paymentEvents.loanId, loanId)).orderBy(desc(paymentEvents.createdAt))
+  }
+
+  async updateLoanPayment(input: {
+    paymentId: string
+    actorUserId: string
+    amount: string
+    paymentType: "REGULAR" | "ADVANCE" | "PENALTY"
+    paymentMethod: "CASH" | "GCASH" | "BANK_TRANSFER" | "OTHER"
+    paymentScheduleId?: string | null
+    paymentDate: Date
+    penaltyReason?: string | null
+    notes?: string | null
+  }) {
+    return db.transaction(async (tx) => {
+      const [existingPayment] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, input.paymentId))
+        .limit(1)
+
+      if (!existingPayment) return null
+      if (existingPayment.deletedAt) {
+        throw new Error("VALIDATION_ERROR: Deleted payments cannot be edited.")
+      }
+
+      if (input.paymentScheduleId) {
+        const [schedule] = await tx
+          .select({
+            id: paymentSchedules.id,
+            loanId: paymentSchedules.loanId,
+          })
+          .from(paymentSchedules)
+          .where(eq(paymentSchedules.id, input.paymentScheduleId))
+          .limit(1)
+
+        if (!schedule || schedule.loanId !== existingPayment.loanId) {
+          throw new Error("VALIDATION_ERROR: Payment schedule not found for this loan.")
+        }
+      }
+
+      if (existingPayment.paymentScheduleId) {
+        await tx
+          .update(paymentSchedules)
+          .set({
+            amountPaid: sql`GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount})`,
+            isPaid: sql`GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount}) >= ${paymentSchedules.amountDue}`,
+            paidAt: sql`CASE
+              WHEN GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount}) >= ${paymentSchedules.amountDue}
+              THEN ${paymentSchedules.paidAt}
+              ELSE NULL
+            END`,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentSchedules.id, existingPayment.paymentScheduleId))
+      }
+
+      if (input.paymentScheduleId) {
+        await tx
+          .update(paymentSchedules)
+          .set({
+            amountPaid: sql`${paymentSchedules.amountPaid} + ${input.amount}`,
+            isPaid: sql`(${paymentSchedules.amountPaid} + ${input.amount}) >= ${paymentSchedules.amountDue}`,
+            paidAt: sql`CASE
+              WHEN (${paymentSchedules.amountPaid} + ${input.amount}) >= ${paymentSchedules.amountDue}
+              THEN COALESCE(${paymentSchedules.paidAt}, NOW())
+              ELSE ${paymentSchedules.paidAt}
+            END`,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentSchedules.id, input.paymentScheduleId))
+      }
+
+      await tx
+        .update(loans)
+        .set({
+          totalPaid: sql`GREATEST(0, ${loans.totalPaid} - ${existingPayment.amount} + ${input.amount})`,
+          outstandingBalance: sql`GREATEST(0, ${loans.outstandingBalance} + ${existingPayment.amount} - ${input.amount})`,
+          updatedAt: new Date(),
+        })
+        .where(eq(loans.id, existingPayment.loanId))
+
+      const [updatedPayment] = await tx
+        .update(payments)
+        .set({
+          amount: input.amount,
+          paymentType: input.paymentType,
+          paymentMethod: input.paymentMethod,
+          paymentScheduleId: input.paymentScheduleId ?? null,
+          paymentDate: input.paymentDate,
+          penaltyReason: input.penaltyReason ?? null,
+          notes: input.notes ?? null,
+        })
+        .where(eq(payments.id, input.paymentId))
+        .returning()
+
+      if (updatedPayment) {
+        await tx.insert(paymentEvents).values({
+          id: randomUUID(),
+          loanId: updatedPayment.loanId,
+          paymentId: updatedPayment.id,
+          eventType: "UPDATED",
+          actorUserId: input.actorUserId,
+          before: toPaymentSnapshot(existingPayment),
+          after: toPaymentSnapshot(updatedPayment),
+        })
+      }
+
+      return {
+        before: existingPayment,
+        after: updatedPayment ?? existingPayment,
+      }
+    })
+  }
+
+  async removeLoanPayment(input: { paymentId: string; reason: string; actorUserId: string }) {
+    return db.transaction(async (tx) => {
+      const [existingPayment] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, input.paymentId))
+        .limit(1)
+
+      if (!existingPayment) return null
+      if (existingPayment.deletedAt) {
+        throw new Error("VALIDATION_ERROR: Payment is already deleted.")
+      }
+
+      if (existingPayment.paymentScheduleId) {
+        await tx
+          .update(paymentSchedules)
+          .set({
+            amountPaid: sql`GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount})`,
+            isPaid: sql`GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount}) >= ${paymentSchedules.amountDue}`,
+            paidAt: sql`CASE
+              WHEN GREATEST(0, ${paymentSchedules.amountPaid} - ${existingPayment.amount}) >= ${paymentSchedules.amountDue}
+              THEN ${paymentSchedules.paidAt}
+              ELSE NULL
+            END`,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentSchedules.id, existingPayment.paymentScheduleId))
+      }
+
+      await tx
+        .update(loans)
+        .set({
+          totalPaid: sql`GREATEST(0, ${loans.totalPaid} - ${existingPayment.amount})`,
+          outstandingBalance: sql`${loans.outstandingBalance} + ${existingPayment.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(loans.id, existingPayment.loanId))
+
+      const deletedAt = new Date()
+      const [softDeletedPayment] = await tx
+        .update(payments)
+        .set({
+          deletedAt,
+          deletedById: input.actorUserId,
+          deleteReason: input.reason,
+        })
+        .where(eq(payments.id, input.paymentId))
+        .returning()
+
+      const finalPayment = softDeletedPayment ?? existingPayment
+      await tx.insert(paymentEvents).values({
+        id: randomUUID(),
+        loanId: finalPayment.loanId,
+        paymentId: finalPayment.id,
+        eventType: "SOFT_DELETED",
+        actorUserId: input.actorUserId,
+        before: toPaymentSnapshot(existingPayment),
+        after: toPaymentSnapshot(finalPayment),
+      })
+
+      await tx.insert(auditLogs).values({
+        id: randomUUID(),
+        userId: input.actorUserId,
+        action: "DELETE",
+        entity: "PAYMENT",
+        entityId: finalPayment.id,
+        payload: {
+          reason: input.reason,
+          deletedPayment: finalPayment,
+        },
+      })
+
+      return finalPayment
+    })
   }
 
   async listInvestors(input: ListInput) {
@@ -859,7 +1075,8 @@ export class AdminRepository {
         .select({
           totalCollections: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
         })
-        .from(payments),
+        .from(payments)
+        .where(sql`${payments.deletedAt} IS NULL`),
       db
         .select({
           totalDisbursed: sql<string>`COALESCE(SUM(${loans.principalAmount}),0)`,
@@ -920,7 +1137,8 @@ export class AdminRepository {
         .select({
           totalPayments: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
         })
-        .from(payments),
+        .from(payments)
+        .where(sql`${payments.deletedAt} IS NULL`),
       db
         .select({
           pendingApplications: count(),
@@ -966,7 +1184,7 @@ export class AdminRepository {
         total: sql<string>`SUM(${payments.amount})`,
       })
       .from(payments)
-      .where(sql`${payments.paymentDate} >= ${windowStart}`)
+      .where(and(sql`${payments.deletedAt} IS NULL`, sql`${payments.paymentDate} >= ${windowStart}`))
       .groupBy(bucketExpr)
       .orderBy(bucketExpr)
     return rows
@@ -1102,6 +1320,7 @@ export class AdminRepository {
         )`,
       })
       .from(payments)
+      .where(sql`${payments.deletedAt} IS NULL`)
     return {
       totalPayments: row?.totalPayments ?? "0.00",
       totalTransactions: row?.totalTransactions ?? 0,
@@ -1287,6 +1506,7 @@ export class AdminRepository {
         totalAmount: sql<string>`COALESCE(SUM(${payments.amount}),0)`,
       })
       .from(payments)
+      .where(sql`${payments.deletedAt} IS NULL`)
       .groupBy(payments.paymentType)
   }
 

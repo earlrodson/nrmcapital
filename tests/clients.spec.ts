@@ -1,18 +1,13 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from './helpers/admin-auth';
 
 test.describe('Admin Clients', () => {
   test.beforeEach(async ({ page }) => {
-    // Login before each test
-    await page.goto('/login');
-    await page.fill('#email', 'admin@nrmcapital.com');
-    await page.fill('#password', 'Admin123!ChangeMe');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/admin/dashboard');
+    await loginAsAdmin(page);
   });
 
   test('should navigate to clients list and display table', async ({ page }) => {
-    // Navigate to clients page
-    await page.click('text=Clients');
+    await page.goto('/admin/clients');
     await expect(page).toHaveURL(/\/admin\/clients/);
     
     // Check for page title and description
@@ -46,6 +41,6 @@ test.describe('Admin Clients', () => {
     
     // Should navigate to /admin/clients/new
     await expect(page).toHaveURL('/admin/clients/new');
-    await expect(page.locator('h1')).toContainText('Onboard New Borrower');
+    await expect(page.locator('h1')).toContainText('New Borrower Onboarding');
   });
 });

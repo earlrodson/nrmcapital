@@ -78,3 +78,14 @@ Use the seeded admin credentials:
 - `pnpm db:push` - push schema directly
 - `pnpm db:studio` - open Drizzle Studio
 - `pnpm db:seed` - seed admin user
+- `pnpm test:e2e` - run Playwright tests
+
+## E2E preflight (recommended)
+
+Before running Playwright, ensure the auth seed and schema are current:
+
+```bash
+pnpm db:migrate
+pnpm db:seed
+pnpm test:e2e
+```

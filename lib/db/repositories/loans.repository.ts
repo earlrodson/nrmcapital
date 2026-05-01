@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto"
 import { asc, desc, eq, sql } from "drizzle-orm"
 import type { InferSelectModel } from "drizzle-orm"
 
-import { loans, paymentSchedules, payments } from "@/drizzle/schema"
+import { loans, paymentEvents, paymentSchedules, payments } from "@/drizzle/schema"
 import { db } from "@/lib/db/client"
+import { paymentEventSnapshotSchema } from "@/lib/domain/payment-events"
 
 type Loan = InferSelectModel<typeof loans>
 type Payment = InferSelectModel<typeof payments>
@@ -96,6 +97,31 @@ export class DrizzleLoansRepository implements LoansRepository {
           recordedById: input.recordedById,
         })
         .returning()
+
+      const createdSnapshot = paymentEventSnapshotSchema.parse({
+        paymentId: payment.id,
+        loanId: payment.loanId,
+        amount: payment.amount,
+        paymentType: payment.paymentType,
+        paymentMethod: payment.paymentMethod,
+        paymentScheduleId: payment.paymentScheduleId ?? null,
+        paymentDate: payment.paymentDate,
+        penaltyReason: payment.penaltyReason ?? null,
+        notes: payment.notes ?? null,
+        deletedAt: payment.deletedAt ?? null,
+        deletedById: payment.deletedById ?? null,
+        deleteReason: payment.deleteReason ?? null,
+      })
+
+      await tx.insert(paymentEvents).values({
+        id: randomUUID(),
+        loanId: payment.loanId,
+        paymentId: payment.id,
+        eventType: "CREATED",
+        actorUserId: input.recordedById,
+        before: null,
+        after: createdSnapshot,
+      })
 
       if (input.paymentScheduleId) {
         const [schedule] = await tx

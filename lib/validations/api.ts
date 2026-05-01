@@ -94,6 +94,32 @@ export const createPaymentSchema = z.object({
   notes: z.string().nullable().optional(),
 })
 
+export const updatePaymentSchema = z
+  .object({
+    paymentId: z.string().min(1),
+    amount: z.union([z.number().positive(), z.string().trim().min(1)]),
+    paymentType: z.enum(["REGULAR", "ADVANCE", "PENALTY"]),
+    paymentMethod: z.enum(["CASH", "GCASH", "BANK_TRANSFER", "OTHER"]),
+    paymentScheduleId: z.string().min(1).nullable().optional(),
+    paymentDate: z.coerce.date(),
+    penaltyReason: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.paymentType === "PENALTY" && !value.penaltyReason?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["penaltyReason"],
+        message: "Penalty reason is required for penalty payments.",
+      })
+    }
+  })
+
+export const removePaymentSchema = z.object({
+  paymentId: z.string().min(1),
+  reason: z.string().trim().min(3, "Reason is required."),
+})
+
 export const createInvestorSchema = z.object({
   name: z.string().min(1),
   capitalAmount: z.union([z.number(), z.string()]).optional(),

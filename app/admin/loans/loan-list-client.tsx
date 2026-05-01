@@ -403,6 +403,10 @@ export function LoanListClient() {
                             <Eye className="mr-2 h-4 w-4" />
                             View Details
                           </DropdownMenuItem>
+                          <DropdownMenuItem render={<Link href={`/admin/loans/${row.loans.id}`} />}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            Open Full Details
+                          </DropdownMenuItem>
                           <DropdownMenuItem render={<Link href={`/admin/payments/new?loanId=${row.loans.id}`} />}>
                             <ReceiptText className="mr-2 h-4 w-4" />
                             Record Payment

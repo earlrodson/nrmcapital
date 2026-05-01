@@ -18,6 +18,7 @@ export const applicationStatusEnum = pgEnum("ApplicationStatus", ["PENDING", "AP
 export const paymentFrequencyEnum = pgEnum("PaymentFrequency", ["MONTHLY", "SEMI_MONTHLY", "WEEKLY"])
 export const paymentMethodEnum = pgEnum("PaymentMethod", ["CASH", "GCASH", "BANK_TRANSFER", "OTHER"])
 export const paymentTypeEnum = pgEnum("PaymentType", ["REGULAR", "ADVANCE", "PENALTY"])
+export const paymentEventTypeEnum = pgEnum("PaymentEventType", ["CREATED", "UPDATED", "SOFT_DELETED"])
 export const fundingTransactionTypeEnum = pgEnum("FundingTransactionType", ["DEPOSIT", "WITHDRAWAL"])
 export const attachmentTypeEnum = pgEnum("AttachmentType", [
   "GOV_ID",
@@ -203,11 +204,42 @@ export const payments = pgTable(
     paymentDate: timestamp("payment_date", { mode: "date", precision: 3 }).notNull().defaultNow(),
     penaltyReason: text("penalty_reason"),
     notes: text("notes"),
+    deletedAt: timestamp("deleted_at", { mode: "date", precision: 3 }),
+    deletedById: text("deleted_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+    deleteReason: text("delete_reason"),
     recordedById: text("recorded_by_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict", onUpdate: "cascade" }),
   },
-  (table) => [index("payments_loan_id_idx").on(table.loanId), index("payments_payment_date_idx").on(table.paymentDate)],
+  (table) => [
+    index("payments_loan_id_idx").on(table.loanId),
+    index("payments_payment_date_idx").on(table.paymentDate),
+    index("payments_deleted_at_idx").on(table.deletedAt),
+  ],
+)
+
+export const paymentEvents = pgTable(
+  "payment_events",
+  {
+    id: text("id").primaryKey(),
+    loanId: text("loan_id")
+      .notNull()
+      .references(() => loans.id, { onDelete: "restrict", onUpdate: "cascade" }),
+    paymentId: text("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "restrict", onUpdate: "cascade" }),
+    eventType: paymentEventTypeEnum("event_type").notNull(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict", onUpdate: "cascade" }),
+    before: jsonb("before"),
+    after: jsonb("after"),
+    createdAt: timestamp("created_at", { mode: "date", precision: 3 }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("payment_events_loan_created_at_idx").on(table.loanId, table.createdAt),
+    index("payment_events_payment_created_at_idx").on(table.paymentId, table.createdAt),
+  ],
 )
 
 export const fundingTransactions = pgTable(

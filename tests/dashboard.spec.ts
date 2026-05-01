@@ -1,13 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from './helpers/admin-auth';
 
 test.describe('Admin Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    // Login before each test
-    await page.goto('/login');
-    await page.fill('#email', 'admin@nrmcapital.com');
-    await page.fill('#password', 'Admin123!ChangeMe');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/admin/dashboard');
+    await loginAsAdmin(page);
   });
 
   test('should display dashboard summary cards', async ({ page }) => {
@@ -19,8 +15,8 @@ test.describe('Admin Dashboard', () => {
   });
 
   test('should display chart and activity', async ({ page }) => {
-    // Check for Overview section
-    await expect(page.locator('text=Overview')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome back, Admin' })).toBeVisible();
+    await expect(page.locator('[data-slot="card-title"]').filter({ hasText: 'Overview' }).first()).toBeVisible();
     
     // Check for Recent Activity section
     await expect(page.locator('text=Recent Activity')).toBeVisible();
