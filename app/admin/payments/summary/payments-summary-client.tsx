@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getPaymentSummary } from "@/lib/actions/admin/payments"
-import { formatCurrencyPHP } from "@/lib/presentation/formatters"
+import { formatCurrencyPHPRounded } from "@/lib/presentation/formatters"
 
 export function PaymentsSummaryClient() {
   const summaryQuery = useQuery({
@@ -50,7 +50,7 @@ export function PaymentsSummaryClient() {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? "..." : formatCurrencyPHP(summary.totalPayments)}</div>
+            <div className="text-2xl font-bold">{loading ? "..." : formatCurrencyPHPRounded(summary.totalPayments)}</div>
           </CardContent>
         </Card>
         <Card>

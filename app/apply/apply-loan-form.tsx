@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2 } from "lucide-react"
 
 import { submitLoanApplication } from "@/lib/actions/applications"
 import { CONFIG } from "@/lib/config"
+import { formatCurrencyPHP } from "@/lib/presentation/formatters"
 
 type PaymentFrequency = "MONTHLY" | "SEMI_MONTHLY" | "WEEKLY"
 
@@ -61,11 +62,6 @@ export function ApplyLoanForm({
     const installmentAmount = totalPayable / totalTerms
     return { totalPayable, totalTerms, installmentAmount }
   }, [form])
-
-  const currency = new Intl.NumberFormat(CONFIG.DEFAULT_SETTINGS.LOCALE, {
-    style: "currency",
-    currency: CONFIG.DEFAULT_SETTINGS.CURRENCY_CODE,
-  })
 
   function updateField(key: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -178,9 +174,9 @@ export function ApplyLoanForm({
         <h2 className="mb-3 text-lg font-bold text-slate-800">Estimation summary</h2>
         {estimate ? (
           <div className="space-y-3 text-sm text-slate-700">
-            <p className="flex justify-between"><span>Estimated installment</span><span className="font-semibold">{currency.format(estimate.installmentAmount)}</span></p>
+            <p className="flex justify-between"><span>Estimated installment</span><span className="font-semibold">{formatCurrencyPHP(estimate.installmentAmount)}</span></p>
             <p className="flex justify-between"><span>Total terms</span><span className="font-semibold">{estimate.totalTerms}</span></p>
-            <p className="flex justify-between border-t border-slate-200 pt-3"><span>Total payable</span><span className="font-semibold">{currency.format(estimate.totalPayable)}</span></p>
+            <p className="flex justify-between border-t border-slate-200 pt-3"><span>Total payable</span><span className="font-semibold">{formatCurrencyPHP(estimate.totalPayable)}</span></p>
           </div>
         ) : (
           <p className="text-sm text-slate-600">Enter valid loan values to see a live estimate summary.</p>

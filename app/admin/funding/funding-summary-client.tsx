@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getFundingSummary, listFundingTransactions } from "@/lib/actions/admin/investors"
-import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
+import { formatCurrencyPHPRounded, formatDate } from "@/lib/presentation/formatters"
 
 interface FundingSummary {
   totalDeposits: string
@@ -79,7 +79,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Total Deposits</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.totalDeposits)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHPRounded(summary.totalDeposits)}
           </CardContent>
         </Card>
         <Card>
@@ -87,7 +87,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Total Collections</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.totalCollections)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHPRounded(summary.totalCollections)}
           </CardContent>
         </Card>
         <Card>
@@ -95,7 +95,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Total Withdrawals</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.totalWithdrawals)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHPRounded(summary.totalWithdrawals)}
           </CardContent>
         </Card>
         <Card>
@@ -103,7 +103,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Total Disbursed</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.totalDisbursed)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHPRounded(summary.totalDisbursed)}
           </CardContent>
         </Card>
         <Card>
@@ -111,7 +111,7 @@ export function FundingSummaryClient() {
             <CardTitle className="text-sm font-medium">Cash Available</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHP(summary.cashAvailable)}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrencyPHPRounded(summary.cashAvailable)}
           </CardContent>
         </Card>
       </div>
@@ -145,7 +145,7 @@ export function FundingSummaryClient() {
                 <TableRow key={row.id}>
                   <TableCell className="text-xs">{formatDate(row.transactionDate)}</TableCell>
                   <TableCell>{row.transactionType}</TableCell>
-                  <TableCell className="text-right font-semibold">{formatCurrencyPHP(row.amount)}</TableCell>
+                  <TableCell className="text-right font-semibold">{formatCurrencyPHPRounded(row.amount)}</TableCell>
                   <TableCell className="text-xs">{row.referenceNumber || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{row.notes || "—"}</TableCell>
                 </TableRow>

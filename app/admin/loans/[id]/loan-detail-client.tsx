@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query"
 
 import { getLoanById, getLoanPayments, getLoanSchedule } from "@/lib/actions/admin/loans"
 import { removePayment, updatePayment } from "@/lib/actions/admin/payments"
-import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
+import { formatCurrencyPHPRounded, formatDate } from "@/lib/presentation/formatters"
 import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -245,25 +245,25 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Principal</CardTitle>
               </CardHeader>
-              <CardContent className="font-semibold">{formatCurrencyPHP(loanQuery.data.principalAmount)}</CardContent>
+              <CardContent className="font-semibold">{formatCurrencyPHPRounded(loanQuery.data.principalAmount)}</CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
               </CardHeader>
-              <CardContent className="font-semibold">{formatCurrencyPHP(loanQuery.data.totalPaid)}</CardContent>
+              <CardContent className="font-semibold">{formatCurrencyPHPRounded(loanQuery.data.totalPaid)}</CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
               </CardHeader>
-              <CardContent className="font-semibold">{formatCurrencyPHP(loanQuery.data.outstandingBalance)}</CardContent>
+              <CardContent className="font-semibold">{formatCurrencyPHPRounded(loanQuery.data.outstandingBalance)}</CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Payable</CardTitle>
               </CardHeader>
-              <CardContent className="font-semibold">{formatCurrencyPHP(loanQuery.data.totalPayable)}</CardContent>
+              <CardContent className="font-semibold">{formatCurrencyPHPRounded(loanQuery.data.totalPayable)}</CardContent>
             </Card>
           </div>
 
@@ -295,11 +295,11 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
                       <TableRow key={term.id}>
                         <TableCell>{term.termNumber}</TableCell>
                         <TableCell>{formatDate(term.dueDate)}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyPHP(term.amountDue)}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyPHP(term.principalDue)}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyPHP(term.interestDue)}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyPHP(amountPaid.toFixed(2))}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyPHP(remainingAmount.toFixed(2))}</TableCell>
+                        <TableCell className="text-right">{formatCurrencyPHPRounded(term.amountDue)}</TableCell>
+                        <TableCell className="text-right">{formatCurrencyPHPRounded(term.principalDue)}</TableCell>
+                        <TableCell className="text-right">{formatCurrencyPHPRounded(term.interestDue)}</TableCell>
+                        <TableCell className="text-right">{formatCurrencyPHPRounded(amountPaid)}</TableCell>
+                        <TableCell className="text-right">{formatCurrencyPHPRounded(remainingAmount)}</TableCell>
                         <TableCell className="text-right">
                           <Badge {...getRepaymentStatusBadge(status)}>
                             {status}
@@ -344,7 +344,7 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
                       return (
                         <TableRow key={payment.id}>
                           <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                          <TableCell className="text-right font-semibold">{formatCurrencyPHP(payment.amount)}</TableCell>
+                          <TableCell className="text-right font-semibold">{formatCurrencyPHPRounded(payment.amount)}</TableCell>
                           <TableCell>{payment.paymentType}</TableCell>
                           <TableCell>{payment.paymentMethod}</TableCell>
                           <TableCell>{linkedTerm ? `Term ${linkedTerm.termNumber}` : "Unlinked"}</TableCell>
@@ -439,7 +439,7 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
                   <option value="">No specific term</option>
                   {scheduleRows.map((term) => (
                     <option key={term.id} value={term.id}>
-                      Term {term.termNumber} - {formatDate(term.dueDate)} ({formatCurrencyPHP(term.amountDue)})
+                      Term {term.termNumber} - {formatDate(term.dueDate)} ({formatCurrencyPHPRounded(term.amountDue)})
                     </option>
                   ))}
                 </select>

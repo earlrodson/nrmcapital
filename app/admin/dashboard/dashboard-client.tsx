@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { formatCurrencyPHP, formatDate, formatDateTime } from "@/lib/presentation/formatters"
+import { formatCurrencyPHPRounded, formatDate, formatDateTime } from "@/lib/presentation/formatters"
 import {
   getDashboardSummary,
   getDashboardActivity,
@@ -171,7 +171,7 @@ export function DashboardClient() {
               <CreditCard className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrencyPHP(summary.totalPayments)}</div>
+              <div className="text-2xl font-bold">{formatCurrencyPHPRounded(summary.totalPayments)}</div>
               <p className="text-xs text-muted-foreground">All recorded payment collections</p>
             </CardContent>
           </Card>
@@ -235,7 +235,7 @@ export function DashboardClient() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrencyPHP(summary.cashAvailable)}</div>
+              <div className="text-2xl font-bold">{formatCurrencyPHPRounded(summary.cashAvailable)}</div>
               <p className="text-xs text-muted-foreground">Current available funding balance</p>
             </CardContent>
           </Card>
@@ -314,7 +314,7 @@ export function DashboardClient() {
                     const label = overviewLabel(entry.bucket, overviewGranularity)
                     return (
                       <circle key={entry.bucket} cx={point.x} cy={point.y} r={4} className="fill-primary stroke-background" strokeWidth={2}>
-                        <title>{`${label}: ${formatCurrencyPHP(entry.total)}`}</title>
+                        <title>{`${label}: ${formatCurrencyPHPRounded(entry.total)}`}</title>
                       </circle>
                     )
                   })}
@@ -322,7 +322,7 @@ export function DashboardClient() {
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {overview.map((entry) => (
                     <span key={entry.bucket}>
-                      {overviewLabel(entry.bucket, overviewGranularity)}: {formatCurrencyPHP(entry.total)}
+                      {overviewLabel(entry.bucket, overviewGranularity)}: {formatCurrencyPHPRounded(entry.total)}
                     </span>
                   ))}
                 </div>
@@ -342,7 +342,7 @@ export function DashboardClient() {
                         </p>
                       </Link>
                       <span className="text-muted-foreground">{item.daysOverdue}d</span>
-                      <span className="font-semibold">{formatCurrencyPHP(item.overdueAmount)}</span>
+                      <span className="font-semibold">{formatCurrencyPHPRounded(item.overdueAmount)}</span>
                     </div>
                   ))}
                 </div>

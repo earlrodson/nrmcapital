@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { getLoanContextById, getLoanSchedule } from "@/lib/actions/admin/loans"
 import { createPayment } from "@/lib/actions/admin/payments"
-import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
+import { formatCurrencyPHPRounded, formatDate } from "@/lib/presentation/formatters"
 
 interface LoanContext {
   loan: {
@@ -188,15 +188,15 @@ export function NewPaymentClient() {
               <div className="grid gap-3 sm:grid-cols-3 text-sm">
                 <div>
                   <p className="text-muted-foreground text-xs">Outstanding</p>
-                  <p className="font-semibold">{formatCurrencyPHP(context.loan.outstandingBalance)}</p>
+                  <p className="font-semibold">{formatCurrencyPHPRounded(context.loan.outstandingBalance)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Paid</p>
-                  <p className="font-semibold">{formatCurrencyPHP(context.loan.totalPaid)}</p>
+                  <p className="font-semibold">{formatCurrencyPHPRounded(context.loan.totalPaid)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Payable</p>
-                  <p className="font-semibold">{formatCurrencyPHP(context.loan.totalPayable)}</p>
+                  <p className="font-semibold">{formatCurrencyPHPRounded(context.loan.totalPayable)}</p>
                 </div>
               </div>
             </div>
@@ -263,7 +263,7 @@ export function NewPaymentClient() {
                   <option value="">No specific term</option>
                   {unpaidTerms.map((term) => (
                     <option key={term.id} value={term.id}>
-                      Term {term.termNumber} - {formatDate(term.dueDate)} ({formatCurrencyPHP(term.amountDue)})
+                      Term {term.termNumber} - {formatDate(term.dueDate)} ({formatCurrencyPHPRounded(term.amountDue)})
                     </option>
                   ))}
                 </select>

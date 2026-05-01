@@ -69,6 +69,35 @@ Use the seeded admin credentials:
 - Email: `admin@nrmcapital.com`
 - Password: `Admin123!ChangeMe`
 
+## 7) Run tests
+
+### Lint checks
+
+```bash
+pnpm lint
+```
+
+### E2E tests (Playwright)
+
+Run these before E2E to ensure schema and auth seed are up to date:
+
+```bash
+pnpm db:migrate
+pnpm db:seed
+```
+
+Run Playwright tests in headless mode:
+
+```bash
+pnpm test:e2e
+```
+
+Run Playwright with interactive UI mode:
+
+```bash
+pnpm test:e2e:ui
+```
+
 ## Useful commands
 
 - `pnpm dev` - start local dev server
@@ -79,13 +108,4 @@ Use the seeded admin credentials:
 - `pnpm db:studio` - open Drizzle Studio
 - `pnpm db:seed` - seed admin user
 - `pnpm test:e2e` - run Playwright tests
-
-## E2E preflight (recommended)
-
-Before running Playwright, ensure the auth seed and schema are current:
-
-```bash
-pnpm db:migrate
-pnpm db:seed
-pnpm test:e2e
-```
+- `pnpm test:e2e:ui` - run Playwright in UI mode
