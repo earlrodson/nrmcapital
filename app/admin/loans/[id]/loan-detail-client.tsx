@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query"
 import { getLoanById, getLoanPayments, getLoanSchedule } from "@/lib/actions/admin/loans"
 import { updatePayment } from "@/lib/actions/admin/payments"
 import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
+import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,6 +45,25 @@ type PaymentRow = {
   paymentDate: string | Date
   penaltyReason: string | null
   notes: string | null
+}
+
+function getTermStatus(term: ScheduleTerm): RepaymentStatus {
+  const amountDue = Number(term.amountDue || "0")
+  const amountPaid = Number(term.effectiveAmountPaid ?? term.amountPaid ?? "0")
+  const remaining = Number(term.effectiveRemainingAmount ?? Math.max(0, amountDue - amountPaid))
+
+  if (remaining <= 0) return "PAID"
+
+  const now = new Date()
+  const dueDate = new Date(term.dueDate)
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDue = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate())
+  const hasPartialPayment = amountPaid > 0
+
+  if (startOfDue < startOfToday) return "OVERDUE"
+  if (startOfDue.getTime() === startOfToday.getTime()) return hasPartialPayment ? "PARTIAL" : "DUE"
+  if (hasPartialPayment) return "PARTIAL"
+  return "UPCOMING"
 }
 
 function toDateInputValue(value: string | Date) {
@@ -235,6 +255,7 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
                     const amountDue = Number(term.amountDue || "0")
                     const amountPaid = Number(term.effectiveAmountPaid ?? term.amountPaid ?? "0")
                     const remainingAmount = Number(term.effectiveRemainingAmount ?? Math.max(0, amountDue - amountPaid))
+                    const status = getTermStatus(term)
                     return (
                       <TableRow key={term.id}>
                         <TableCell>{term.termNumber}</TableCell>
@@ -245,8 +266,8 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
                         <TableCell className="text-right">{formatCurrencyPHP(amountPaid.toFixed(2))}</TableCell>
                         <TableCell className="text-right">{formatCurrencyPHP(remainingAmount.toFixed(2))}</TableCell>
                         <TableCell className="text-right">
-                          <Badge variant={remainingAmount <= 0 ? "default" : "outline"}>
-                            {remainingAmount <= 0 ? "PAID" : "OPEN"}
+                          <Badge {...getRepaymentStatusBadge(status)}>
+                            {status}
                           </Badge>
                         </TableCell>
                       </TableRow>
