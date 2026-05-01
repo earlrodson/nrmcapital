@@ -3,7 +3,7 @@
 import { adminRepository } from "@/lib/db/repositories/admin.repository"
 import { loansService } from "@/lib/services/loans.service"
 import { requireActionRole, withActionError } from "@/lib/actions/utils"
-import { createPaymentSchema, updatePaymentSchema } from "@/lib/validations/api"
+import { createPaymentSchema, removePaymentSchema, updatePaymentSchema } from "@/lib/validations/api"
 import { z } from "zod"
 
 export async function listPayments(params: { page: number; pageSize: number }) {
@@ -64,6 +64,7 @@ export async function updatePayment(input: z.infer<typeof updatePaymentSchema>) 
 
     const result = await adminRepository.updateLoanPayment({
       paymentId: data.paymentId,
+      actorUserId: user.userId,
       amount,
       paymentType: data.paymentType,
       paymentMethod: data.paymentMethod,
@@ -87,6 +88,29 @@ export async function updatePayment(input: z.infer<typeof updatePaymentSchema>) 
     })
 
     return result.after
+  })
+}
+
+export async function removePayment(input: z.infer<typeof removePaymentSchema>) {
+  return withActionError(async () => {
+    const user = await requireActionRole(["ADMIN", "SUPERADMIN"])
+    const data = removePaymentSchema.parse(input)
+
+    const deletedPayment = await adminRepository.removeLoanPayment({
+      paymentId: data.paymentId,
+      reason: data.reason,
+      actorUserId: user.userId,
+    })
+    if (!deletedPayment) throw new Error("NOT_FOUND: Payment not found.")
+
+    return { success: true }
+  })
+}
+
+export async function listPaymentEventsForLoan(loanId: string) {
+  return withActionError(async () => {
+    await requireActionRole(["ADMIN", "SUPERADMIN"])
+    return adminRepository.listPaymentEventsByLoan(loanId)
   })
 }
 

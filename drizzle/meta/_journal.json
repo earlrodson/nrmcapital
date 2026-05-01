@@ -29,6 +29,13 @@
       "when": 1777300000000,
       "tag": "0003_public_loan_applications",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777615200000,
+      "tag": "0004_payment_events_soft_delete",
+      "breakpoints": true
     }
   ]
 }

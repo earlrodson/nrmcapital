@@ -6,7 +6,7 @@ import { ArrowLeft, Loader2, Pencil } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 import { getLoanById, getLoanPayments, getLoanSchedule } from "@/lib/actions/admin/loans"
-import { updatePayment } from "@/lib/actions/admin/payments"
+import { removePayment, updatePayment } from "@/lib/actions/admin/payments"
 import { formatCurrencyPHP, formatDate } from "@/lib/presentation/formatters"
 import { getRepaymentStatusBadge, type RepaymentStatus } from "@/lib/presentation/status"
 import { Badge } from "@/components/ui/badge"
@@ -113,6 +113,10 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
   const [editNotes, setEditNotes] = React.useState("")
   const [submitError, setSubmitError] = React.useState<string | null>(null)
   const [isSaving, setIsSaving] = React.useState(false)
+  const [paymentToRemove, setPaymentToRemove] = React.useState<PaymentRow | null>(null)
+  const [removeReason, setRemoveReason] = React.useState("")
+  const [removeError, setRemoveError] = React.useState<string | null>(null)
+  const [isRemoving, setIsRemoving] = React.useState(false)
 
   const scheduleRows: ScheduleTerm[] = scheduleQuery.data ?? []
   const paymentRows: PaymentRow[] = paymentsQuery.data ?? []
@@ -134,6 +138,12 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
   const closeEditPayment = () => {
     setSelectedPayment(null)
     setSubmitError(null)
+  }
+
+  const closeRemoveDialog = () => {
+    setPaymentToRemove(null)
+    setRemoveReason("")
+    setRemoveError(null)
   }
 
   async function handleUpdatePayment(event: React.FormEvent<HTMLFormElement>) {
@@ -165,6 +175,31 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
       setSubmitError("An unexpected error occurred while updating payment.")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleRemovePayment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!paymentToRemove) return
+    setRemoveError(null)
+    setIsRemoving(true)
+
+    try {
+      const result = await removePayment({
+        paymentId: paymentToRemove.id,
+        reason: removeReason.trim(),
+      })
+      if (!result.success) {
+        setRemoveError(result.error || "Failed to remove payment.")
+        return
+      }
+
+      await Promise.all([loanQuery.refetch(), scheduleQuery.refetch(), paymentsQuery.refetch()])
+      closeRemoveDialog()
+    } catch {
+      setRemoveError("An unexpected error occurred while removing payment.")
+    } finally {
+      setIsRemoving(false)
     }
   }
 
@@ -318,10 +353,15 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
                             {payment.notes || "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button type="button" size="sm" variant="outline" onClick={() => openEditPayment(payment)}>
-                              <Pencil className="mr-1 h-3.5 w-3.5" />
-                              Edit
-                            </Button>
+                            <div className="flex justify-end gap-2">
+                              <Button type="button" size="sm" variant="outline" onClick={() => openEditPayment(payment)}>
+                                <Pencil className="mr-1 h-3.5 w-3.5" />
+                                Edit
+                              </Button>
+                              <Button type="button" size="sm" variant="destructive" onClick={() => setPaymentToRemove(payment)}>
+                                Remove
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )
@@ -435,6 +475,40 @@ export function LoanDetailClient({ loanId }: LoanDetailClientProps) {
               </Button>
               <Button type="submit" disabled={isSaving || !editAmount.trim() || !editPaymentDate}>
                 {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(paymentToRemove)} onOpenChange={(open) => !open && closeRemoveDialog()}>
+        <DialogContent className="sm:max-w-lg">
+          <form onSubmit={handleRemovePayment}>
+            <DialogHeader>
+              <DialogTitle>Remove Payment Record</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-4">
+              <p className="text-sm text-muted-foreground">
+                This will reverse the loan/schedule balances and remove this payment from active records. The deletion will remain in audit history logs.
+              </p>
+              <div className="grid gap-2">
+                <Label htmlFor="removeReason">Reason</Label>
+                <textarea
+                  id="removeReason"
+                  className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                  value={removeReason}
+                  onChange={(event) => setRemoveReason(event.target.value)}
+                  required
+                />
+              </div>
+              {removeError ? <p className="text-sm text-destructive">{removeError}</p> : null}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeRemoveDialog} disabled={isRemoving}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="destructive" disabled={isRemoving || removeReason.trim().length < 3}>
+                {isRemoving ? "Removing..." : "Remove Payment"}
               </Button>
             </DialogFooter>
           </form>

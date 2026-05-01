@@ -115,6 +115,11 @@ export const updatePaymentSchema = z
     }
   })
 
+export const removePaymentSchema = z.object({
+  paymentId: z.string().min(1),
+  reason: z.string().trim().min(3, "Reason is required."),
+})
+
 export const createInvestorSchema = z.object({
   name: z.string().min(1),
   capitalAmount: z.union([z.number(), z.string()]).optional(),
