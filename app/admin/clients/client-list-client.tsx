@@ -40,6 +40,7 @@ type ClientRow = {
   idType?: string | null
   idNumber?: string | null
   isActive: boolean
+  delinquent?: boolean
   createdAt: Date | string
 }
 
@@ -73,7 +74,7 @@ export function ClientListClient() {
 
   const status = React.useMemo(() => {
     const value = searchParams.get("status")
-    if (value === "active" || value === "inactive") {
+    if (value === "active" || value === "inactive" || value === "delinquent") {
       return value
     }
     return null
@@ -268,9 +269,16 @@ export function ClientListClient() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={client.isActive ? "default" : "secondary"} className="text-[10px] h-5">
-                      {client.isActive ? "Active" : "Inactive"}
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant={client.isActive ? "default" : "secondary"} className="text-[10px] h-5">
+                        {client.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {client.isActive && client.delinquent ? (
+                        <Badge variant="destructive" className="text-[10px] h-5">
+                          Delinquent
+                        </Badge>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {new Date(client.createdAt).toLocaleDateString()}

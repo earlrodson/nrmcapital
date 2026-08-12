@@ -6,6 +6,7 @@ import type { InferSelectModel } from "drizzle-orm"
 import { loans, paymentEvents, paymentSchedules, payments } from "@/drizzle/schema"
 import { db } from "@/lib/db/client"
 import { paymentEventSnapshotSchema } from "@/lib/domain/payment-events"
+import { reconcileLoanAndClientStatus } from "@/lib/db/repositories/loan-status.repository"
 
 type Loan = InferSelectModel<typeof loans>
 type Payment = InferSelectModel<typeof payments>
@@ -160,6 +161,8 @@ export class DrizzleLoansRepository implements LoansRepository {
           updatedAt: new Date(),
         })
         .where(eq(loans.id, input.loanId))
+
+      await reconcileLoanAndClientStatus(input.loanId, tx)
 
       return payment
     })

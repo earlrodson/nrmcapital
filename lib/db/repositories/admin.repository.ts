@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { and, asc, count, desc, eq, ilike, or, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm"
 
 import {
   attachments,
@@ -17,6 +17,7 @@ import {
   users,
 } from "@/drizzle/schema"
 import { db } from "@/lib/db/client"
+import { reconcileLoanAndClientStatus } from "@/lib/db/repositories/loan-status.repository"
 import { paymentEventSnapshotSchema } from "@/lib/domain/payment-events"
 import { calculateLoanTerms } from "@/lib/domain/loan-calculations"
 
@@ -53,6 +54,17 @@ function toPaymentSnapshot(payment: typeof payments.$inferSelect) {
   })
 }
 
+function clientDelinquentClause() {
+  return sql<boolean>`EXISTS (
+    SELECT 1
+    FROM loans l
+    JOIN payment_schedules ps ON ps.loan_id = l.id
+    WHERE l.client_id = clients.id
+      AND ps.is_paid = false
+      AND ps.due_date < NOW()
+  )`
+}
+
 export class AdminRepository {
   async findUserByEmail(email: string) {
     const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1)
@@ -65,6 +77,8 @@ export class AdminRepository {
 
   async listClients(input: ListInput) {
     const clauses = []
+    const delinquentClause = clientDelinquentClause()
+
     if (input.search) {
       clauses.push(or(ilike(clients.firstName, `%${input.search}%`), ilike(clients.lastName, `%${input.search}%`)))
     }
@@ -74,10 +88,14 @@ export class AdminRepository {
     if (input.status === "inactive") {
       clauses.push(eq(clients.isActive, false))
     }
+    if (input.status === "delinquent") {
+      clauses.push(eq(clients.isActive, true))
+      clauses.push(delinquentClause)
+    }
 
     const whereClause = clauses.length ? and(...clauses) : undefined
     const rows = await db
-      .select()
+      .select({ ...getTableColumns(clients), delinquent: delinquentClause })
       .from(clients)
       .where(whereClause)
       .orderBy(desc(clients.createdAt))
@@ -118,7 +136,11 @@ export class AdminRepository {
   }
 
   async getClientById(clientId: string) {
-    const [row] = await db.select().from(clients).where(eq(clients.id, clientId)).limit(1)
+    const [row] = await db
+      .select({ ...getTableColumns(clients), delinquent: clientDelinquentClause() })
+      .from(clients)
+      .where(eq(clients.id, clientId))
+      .limit(1)
     return row ?? null
   }
 
@@ -221,7 +243,7 @@ export class AdminRepository {
   }
 
   async listLoans(input: ListInput) {
-    const clauses = [eq(clients.isActive, true)]
+    const clauses = []
     const overdueClause = sql<boolean>`EXISTS (
       SELECT 1
       FROM payment_schedules ps
@@ -894,6 +916,8 @@ export class AdminRepository {
         })
       }
 
+      await reconcileLoanAndClientStatus(existingPayment.loanId, tx)
+
       return {
         before: existingPayment,
         after: updatedPayment ?? existingPayment,
@@ -972,6 +996,8 @@ export class AdminRepository {
           deletedPayment: finalPayment,
         },
       })
+
+      await reconcileLoanAndClientStatus(existingPayment.loanId, tx)
 
       return finalPayment
     })

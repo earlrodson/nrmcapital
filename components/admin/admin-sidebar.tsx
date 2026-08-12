@@ -62,6 +62,10 @@ const data = {
           url: "/admin/clients?status=inactive",
         },
         {
+          title: "Delinquent Clients",
+          url: "/admin/clients?status=delinquent",
+        },
+        {
           title: LABELS.NEW_BORROWER,
           url: "/admin/clients/new",
         },
@@ -78,6 +82,12 @@ const data = {
       url: "/admin/loans",
       icon: Briefcase,
       isActive: false,
+      items: [
+        {
+          title: "Completed Loans",
+          url: "/admin/loans?status=completed",
+        },
+      ],
     },
     {
       title: "Payments",
