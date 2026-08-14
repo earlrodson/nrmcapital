@@ -34,7 +34,12 @@ export async function reconcileLoanAndClientStatus(loanId: string, executor: DbE
     .from(loans)
     .where(and(eq(loans.clientId, loan.clientId), ne(loans.id, loanId)))
 
-  const finalStatus = balance <= 0 && loan.status !== "DEFAULTED" ? "COMPLETED" : loan.status
+  const finalStatus =
+    balance <= 0 && loan.status !== "DEFAULTED"
+      ? "COMPLETED"
+      : balance > 0 && loan.status === "COMPLETED"
+        ? "ACTIVE"
+        : loan.status
   const hasActiveLoan = finalStatus === "ACTIVE" || clientLoans.some((l) => l.status === "ACTIVE")
 
   const [client] = await executor

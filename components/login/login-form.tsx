@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { Mail, Lock, Loader2, ArrowRight } from "lucide-react"
+import { User, Lock, Loader2, ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -46,7 +46,7 @@ export function LoginForm() {
     setIsLoading(true)
 
     const form = e.currentTarget
-    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim()
+    const identifier = (form.elements.namedItem("identifier") as HTMLInputElement).value.trim()
     const password = (form.elements.namedItem("password") as HTMLInputElement).value
 
     try {
@@ -55,7 +55,7 @@ export function LoginForm() {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       })
 
       const payload = (await response.json()) as LoginResponse
@@ -88,29 +88,29 @@ export function LoginForm() {
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
         <p className="text-sm text-muted-foreground">
-          Sign in to your NRM Capital administrator account
+          Sign in to your NRM Capital account
         </p>
       </div>
 
       <Card className="glass-panel-strong border-white/20 shadow-2xl overflow-hidden">
         <CardHeader className="pb-4">
           <CardTitle className="text-xl">Login</CardTitle>
-          <CardDescription>Enter your credentials to access the dashboard</CardDescription>
+          <CardDescription>Staff: sign in with your email. Clients: sign in with your Client Number.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Email Address
+              <label htmlFor="identifier" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Email or Client Number
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="name@company.com"
+                  id="identifier"
+                  name="identifier"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="name@company.com or CL-0001"
                   className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
                   required
                   disabled={isLoading}
@@ -118,14 +118,9 @@ export function LoginForm() {
               </div>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Password
-                </label>
-                <Link href="#" className="text-xs text-primary hover:underline font-medium">
-                  Forgot password?
-                </Link>
-              </div>
+              <label htmlFor="password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Password
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input

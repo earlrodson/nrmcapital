@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  identifier: z.string().min(1),
   password: z.string().min(1),
 })
 
@@ -157,6 +157,7 @@ export const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   role: z.enum(["SUPERADMIN", "ADMIN", "CLIENT"]).optional(),
   isActive: z.boolean().optional(),
+  isRestricted: z.boolean().optional(),
 })
 
 export const resetUserPasswordSchema = z.object({

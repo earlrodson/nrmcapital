@@ -157,16 +157,23 @@ export class AdminRepository {
   }
 
   async deactivateClient(clientId: string) {
-    const [row] = await db
-      .update(clients)
-      .set({
-        isActive: false,
-        deletedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(clients.id, clientId))
-      .returning()
-    return row ?? null
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(clients)
+        .set({
+          isActive: false,
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(clients.id, clientId))
+        .returning()
+
+      if (row?.userId) {
+        await tx.update(users).set({ isActive: false, updatedAt: new Date() }).where(eq(users.id, row.userId))
+      }
+
+      return row ?? null
+    })
   }
 
   async listClientLoans(clientId: string) {
@@ -1550,6 +1557,32 @@ export class AdminRepository {
   async getClientByUserId(userId: string) {
     const [client] = await db.select().from(clients).where(eq(clients.userId, userId)).limit(1)
     return client ?? null
+  }
+
+  async createClientPortalUser(input: { clientId: string; passwordHash: string; name: string }) {
+    return db.transaction(async (tx) => {
+      const [client] = await tx.select().from(clients).where(eq(clients.id, input.clientId)).limit(1)
+      if (!client) return null
+      if (client.userId) {
+        throw new Error("VALIDATION_ERROR: Client already has portal access.")
+      }
+
+      const [user] = await tx
+        .insert(users)
+        .values({
+          id: randomUUID(),
+          email: client.clientNumber,
+          passwordHash: input.passwordHash,
+          name: input.name,
+          role: "CLIENT",
+          updatedAt: new Date(),
+        })
+        .returning()
+
+      await tx.update(clients).set({ userId: user.id, updatedAt: new Date() }).where(eq(clients.id, input.clientId))
+
+      return { user, client }
+    })
   }
 }
 

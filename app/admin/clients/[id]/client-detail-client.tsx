@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Loader2,
   Download,
-  Pencil
+  Pencil,
+  KeyRound
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -24,9 +25,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
+  createClientPortalAccess,
   getClientById,
   listClientAttachments,
   listClientLoans,
+  resetClientPortalAccessPassword,
   updateClient,
 } from "@/lib/actions/admin/clients"
 import { getLoanSchedule, updatePaymentScheduleDueDate } from "@/lib/actions/admin/loans"
@@ -39,6 +42,7 @@ interface ClientDetailProps {
 
 interface ClientData {
   id: string
+  userId: string | null
   firstName: string
   lastName: string
   contactNumber: string | null
@@ -136,6 +140,10 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
   const [selectedScheduleTermId, setSelectedScheduleTermId] = React.useState<string | null>(null)
   const [editedDueDate, setEditedDueDate] = React.useState("")
   const [maxAllowedDueDate, setMaxAllowedDueDate] = React.useState<string | undefined>(undefined)
+  const [isPortalDialogOpen, setIsPortalDialogOpen] = React.useState(false)
+  const [isPortalActionPending, setIsPortalActionPending] = React.useState(false)
+  const [portalActionError, setPortalActionError] = React.useState<string | null>(null)
+  const [portalCredentials, setPortalCredentials] = React.useState<{ loginId: string; password: string } | null>(null)
 
   React.useEffect(() => {
     async function fetchData() {
@@ -250,6 +258,43 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
     }
   }
 
+  const handleCreatePortalAccess = async () => {
+    setIsPortalActionPending(true)
+    setPortalActionError(null)
+    try {
+      const result = await createClientPortalAccess(clientId)
+      if (!result.success) {
+        setPortalActionError(result.error || "Failed to create portal access.")
+        return
+      }
+      setData((previous) => (previous ? { ...previous, client: { ...previous.client, userId: result.data.userId } } : previous))
+      setPortalCredentials({ loginId: result.data.loginId, password: result.data.password })
+      setIsPortalDialogOpen(true)
+    } catch {
+      setPortalActionError("An error occurred while creating portal access.")
+    } finally {
+      setIsPortalActionPending(false)
+    }
+  }
+
+  const handleResetPortalPassword = async () => {
+    setIsPortalActionPending(true)
+    setPortalActionError(null)
+    try {
+      const result = await resetClientPortalAccessPassword(clientId)
+      if (!result.success) {
+        setPortalActionError(result.error || "Failed to reset portal password.")
+        return
+      }
+      setPortalCredentials({ loginId: result.data.loginId, password: result.data.password })
+      setIsPortalDialogOpen(true)
+    } catch {
+      setPortalActionError("An error occurred while resetting the portal password.")
+    } finally {
+      setIsPortalActionPending(false)
+    }
+  }
+
   const openScheduleEditDialog = (term: ScheduleTerm) => {
     const nextTerm = data?.schedule.find((item) => item.termNumber === term.termNumber + 1)
     setSelectedScheduleTermId(term.id)
@@ -340,19 +385,33 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
             <span>Registered on {formatDate(client.createdAt)}</span>
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={openEditDialog}>
-            Edit Profile
-          </Button>
-          {loan ? (
-            <Link href={`/admin/payments/new?loanId=${loan.id}&returnTo=${encodeURIComponent(`/admin/clients/${clientId}`)}`}>
-              <Button size="sm">Record Payment</Button>
-            </Link>
-          ) : (
-            <Button size="sm" disabled>
-              Record Payment
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={openEditDialog}>
+              Edit Profile
             </Button>
-          )}
+            {client.userId ? (
+              <Button variant="outline" size="sm" onClick={handleResetPortalPassword} disabled={isPortalActionPending}>
+                {isPortalActionPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <KeyRound className="mr-1.5 h-3.5 w-3.5" />}
+                Reset Portal Password
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={handleCreatePortalAccess} disabled={isPortalActionPending}>
+                {isPortalActionPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <KeyRound className="mr-1.5 h-3.5 w-3.5" />}
+                Create Portal Access
+              </Button>
+            )}
+            {loan ? (
+              <Link href={`/admin/payments/new?loanId=${loan.id}&returnTo=${encodeURIComponent(`/admin/clients/${clientId}`)}`}>
+                <Button size="sm">Record Payment</Button>
+              </Link>
+            ) : (
+              <Button size="sm" disabled>
+                Record Payment
+              </Button>
+            )}
+          </div>
+          {portalActionError ? <p className="text-xs text-destructive">{portalActionError}</p> : null}
         </div>
       </div>
 
@@ -432,6 +491,44 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isPortalDialogOpen}
+        onOpenChange={(open) => {
+          setIsPortalDialogOpen(open)
+          if (!open) setPortalCredentials(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Client Portal Credentials</DialogTitle>
+            <DialogDescription>
+              Share these with the client now — the password is shown only once and cannot be retrieved again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="portal-login-id">Client Number (login)</Label>
+              <Input id="portal-login-id" readOnly value={portalCredentials?.loginId ?? ""} className="font-mono text-xs" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="portal-password">Password</Label>
+              <Input id="portal-password" readOnly value={portalCredentials?.password ?? ""} className="font-mono text-xs" />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button
+              type="button"
+              onClick={() => {
+                setIsPortalDialogOpen(false)
+                setPortalCredentials(null)
+              }}
+            >
+              Done
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

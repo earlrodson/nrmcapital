@@ -215,6 +215,7 @@ export function NewBorrowerClient() {
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Onboarding failed")
+    } finally {
       setIsSubmitting(false)
     }
   }
