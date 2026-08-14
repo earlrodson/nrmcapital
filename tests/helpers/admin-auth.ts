@@ -5,7 +5,7 @@ export async function loginAsAdmin(page: Page) {
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "Admin123!ChangeMe"
 
   await page.goto("/login")
-  await page.fill("#email", adminEmail)
+  await page.fill("#identifier", adminEmail)
   await page.fill("#password", adminPassword)
   const loginResponsePromise = page.waitForResponse(
     (response) => response.url().includes("/api/auth/login") && response.request().method() === "POST",

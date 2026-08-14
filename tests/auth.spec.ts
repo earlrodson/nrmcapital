@@ -5,7 +5,7 @@ test.describe('Authentication', () => {
   test('should show error with invalid credentials', async ({ page }) => {
     await page.goto('/login');
     
-    await page.fill('#email', 'wrong@example.com');
+    await page.fill('#identifier', 'wrong@example.com');
     await page.fill('#password', 'wrongpassword');
     await page.click('button[type="submit"]');
     

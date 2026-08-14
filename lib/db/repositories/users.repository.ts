@@ -21,6 +21,7 @@ export interface UsersRepository {
       name: string
       role: "SUPERADMIN" | "ADMIN" | "CLIENT"
       isActive: boolean
+      isRestricted: boolean
       lastLoginAt: Date | null
       createdAt: Date
     }>
@@ -83,6 +84,7 @@ export class DrizzleUsersRepository implements UsersRepository {
         name: users.name,
         role: users.role,
         isActive: users.isActive,
+        isRestricted: users.isRestricted,
         lastLoginAt: users.lastLoginAt,
         createdAt: users.createdAt,
       })
