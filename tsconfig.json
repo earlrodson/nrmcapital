@@ -30,6 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-<<<<<<< HEAD
   "exclude": ["node_modules", "tools"]
 }
