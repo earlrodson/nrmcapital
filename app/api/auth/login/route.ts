@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       return fail("This account has been restricted. Contact an administrator.", 403, "ACCOUNT_RESTRICTED")
     }
 
-    await clearLoginThrottle(data.identifier)
+    await clearLoginThrottle(data.identifier, ip)
     const sessionUser = await createSession(user.id)
     return ok(sessionUser)
   })
