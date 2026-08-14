@@ -27,7 +27,7 @@ function extractStack() {
       migrate:   `${pm} run db:migrate`,
       push:      `${pm} run db:push`,
       studio:    `${pm} run db:studio`,
-      snapshot:  `${pm} tools/snapshot.ts`,
+      snapshot:  `bun tools/snapshot.ts`,
     },
   }
 }
@@ -44,21 +44,53 @@ function findSchemaFiles(): string[] {
   return candidates.filter(p => existsSync(join(ROOT, p))).map(p => join(ROOT, p))
 }
 
+// Finds the index of the '{' that closes the one opened at openIndex, respecting nesting.
+function findMatchingBrace(source: string, openIndex: number): number {
+  let depth = 1
+  for (let i = openIndex + 1; i < source.length; i++) {
+    if (source[i] === '{') depth++
+    else if (source[i] === '}') { depth--; if (depth === 0) return i }
+  }
+  return -1
+}
+
+// Splits a column-object body into top-level `key: value` segments, ignoring
+// commas inside nested {}/()/[] (e.g. `.references(() => x.id, { onDelete: ... })`).
+function splitTopLevel(body: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]
+    if (ch === '{' || ch === '(' || ch === '[') depth++
+    else if (ch === '}' || ch === ')' || ch === ']') depth--
+    else if (ch === ',' && depth === 0) {
+      parts.push(body.slice(start, i))
+      start = i + 1
+    }
+  }
+  parts.push(body.slice(start))
+  return parts
+}
+
 function extractDrizzleSchema(files: string[]) {
   const tables: Record<string, { columns: string[]; dialect: string }> = {}
 
   for (const file of files) {
     const source = readFile(file)
-    // Match: export const tableName = pgTable('sql_name', { ... })
-    const tableRe = /export const (\w+)\s*=\s*(pgTable|mysqlTable|sqliteTable|pgView|mysqlView)\(\s*['"]([^'"]+)['"]\s*,\s*\{([^}]+)\}/g
+    // Match: export const tableName = pgTable('sql_name', { ...columns object opens here
+    const declRe = /export const (\w+)\s*=\s*(pgTable|mysqlTable|sqliteTable|pgView|mysqlView)\(\s*['"]([^'"]+)['"]\s*,\s*\{/g
     let m: RegExpExecArray | null
-    while ((m = tableRe.exec(source)) !== null) {
-      const [, exportName, fn,, body] = m
+    while ((m = declRe.exec(source)) !== null) {
+      const [, exportName, fn] = m
       const dialect = fn.startsWith('pg') ? 'postgresql' : fn.startsWith('mysql') ? 'mysql' : 'sqlite'
-      const colRe = /^\s+(\w+)\s*:/gm
-      const columns: string[] = []
-      let c: RegExpExecArray | null
-      while ((c = colRe.exec(body)) !== null) columns.push(c[1])
+      const openIndex = declRe.lastIndex - 1
+      const closeIndex = findMatchingBrace(source, openIndex)
+      if (closeIndex === -1) continue
+      const body = source.slice(openIndex + 1, closeIndex)
+      const columns = splitTopLevel(body)
+        .map(seg => seg.trim().match(/^(\w+)\s*:/)?.[1])
+        .filter((c): c is string => Boolean(c))
       tables[exportName] = { columns, dialect }
     }
   }
@@ -79,6 +111,15 @@ function keyFiles() {
   return result
 }
 
+function envVars(): string[] {
+  const example = readFile(join(ROOT, '.env.example'))
+  return example
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#'))
+    .map(line => line.split('=')[0])
+}
+
 const schemaFiles = findSchemaFiles()
 const tables = extractDrizzleSchema(schemaFiles)
 const snapshot = {
@@ -91,11 +132,10 @@ const snapshot = {
     tables,
   },
   key_files: keyFiles(),
-  env_map: {
-    development: { DATABASE_URL: 'FILL_IN' },
-    staging:     { DATABASE_URL: 'FILL_IN' },
-    production:  { DATABASE_URL: 'FILL_IN' },
-    notes: ['Never commit real DATABASE_URL values — use .env files'],
+  env: {
+    required_vars: envVars(),
+    source: '.env.example',
+    notes: ['Single .env file, no dev/staging/prod split. Never commit real values.'],
   },
 }
 
