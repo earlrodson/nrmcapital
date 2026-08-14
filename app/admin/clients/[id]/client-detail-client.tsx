@@ -46,7 +46,7 @@ interface ClientData {
   idType: string | null
   idNumber: string | null
   isActive: boolean
-  delinquent?: boolean
+  deferred?: boolean | null
   createdAt: string | Date
 }
 
@@ -330,8 +330,8 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
             <Badge variant={client.isActive ? "default" : "secondary"}>
               {client.isActive ? "Active Account" : "Inactive"}
             </Badge>
-            {client.isActive && client.delinquent ? (
-              <Badge variant="destructive">Delinquent</Badge>
+            {client.isActive && client.deferred ? (
+              <Badge variant="destructive">Deferred</Badge>
             ) : null}
           </div>
           <p className="text-muted-foreground flex items-center gap-2">

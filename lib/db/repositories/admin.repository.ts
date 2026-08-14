@@ -54,17 +54,6 @@ function toPaymentSnapshot(payment: typeof payments.$inferSelect) {
   })
 }
 
-function clientDelinquentClause() {
-  return sql<boolean>`EXISTS (
-    SELECT 1
-    FROM loans l
-    JOIN payment_schedules ps ON ps.loan_id = l.id
-    WHERE l.client_id = clients.id
-      AND ps.is_paid = false
-      AND ps.due_date < NOW()
-  )`
-}
-
 export class AdminRepository {
   async findUserByEmail(email: string) {
     const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1)
@@ -77,7 +66,6 @@ export class AdminRepository {
 
   async listClients(input: ListInput) {
     const clauses = []
-    const delinquentClause = clientDelinquentClause()
 
     if (input.search) {
       clauses.push(or(ilike(clients.firstName, `%${input.search}%`), ilike(clients.lastName, `%${input.search}%`)))
@@ -88,14 +76,14 @@ export class AdminRepository {
     if (input.status === "inactive") {
       clauses.push(eq(clients.isActive, false))
     }
-    if (input.status === "delinquent") {
+    if (input.status === "deferred") {
       clauses.push(eq(clients.isActive, true))
-      clauses.push(delinquentClause)
+      clauses.push(eq(clients.deferred, true))
     }
 
     const whereClause = clauses.length ? and(...clauses) : undefined
     const rows = await db
-      .select({ ...getTableColumns(clients), delinquent: delinquentClause })
+      .select(getTableColumns(clients))
       .from(clients)
       .where(whereClause)
       .orderBy(desc(clients.createdAt))
@@ -136,11 +124,22 @@ export class AdminRepository {
   }
 
   async getClientById(clientId: string) {
+    const [row] = await db.select().from(clients).where(eq(clients.id, clientId)).limit(1)
+    return row ?? null
+  }
+
+  async setClientDeferred(clientId: string, deferred: boolean, setById: string) {
     const [row] = await db
-      .select({ ...getTableColumns(clients), delinquent: clientDelinquentClause() })
-      .from(clients)
+      .update(clients)
+      .set({
+        deferred,
+        deferredSetById: deferred ? setById : null,
+        deferredSetAt: deferred ? new Date() : null,
+        deferredReason: deferred ? undefined : null,
+        updatedAt: new Date(),
+      })
       .where(eq(clients.id, clientId))
-      .limit(1)
+      .returning()
     return row ?? null
   }
 

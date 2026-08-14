@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { listClients, deactivateClient, getClientById, updateClient } from "@/lib/actions/admin/clients"
+import { listClients, deactivateClient, getClientById, updateClient, setClientDeferred } from "@/lib/actions/admin/clients"
 
 type ClientRow = {
   id: string
@@ -40,7 +40,7 @@ type ClientRow = {
   idType?: string | null
   idNumber?: string | null
   isActive: boolean
-  delinquent?: boolean
+  deferred?: boolean | null
   createdAt: Date | string
 }
 
@@ -74,7 +74,7 @@ export function ClientListClient() {
 
   const status = React.useMemo(() => {
     const value = searchParams.get("status")
-    if (value === "active" || value === "inactive" || value === "delinquent") {
+    if (value === "active" || value === "inactive" || value === "deferred") {
       return value
     }
     return null
@@ -110,6 +110,17 @@ export function ClientListClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "clients"] })
       setPendingDeactivateClient(null)
+    }
+  })
+
+  const deferMutation = useMutation({
+    mutationFn: async ({ id, deferred }: { id: string; deferred: boolean }) => {
+      const res = await setClientDeferred(id, deferred)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "clients"] })
     }
   })
 
@@ -273,9 +284,9 @@ export function ClientListClient() {
                       <Badge variant={client.isActive ? "default" : "secondary"} className="text-[10px] h-5">
                         {client.isActive ? "Active" : "Inactive"}
                       </Badge>
-                      {client.isActive && client.delinquent ? (
+                      {client.isActive && client.deferred ? (
                         <Badge variant="destructive" className="text-[10px] h-5">
-                          Delinquent
+                          Deferred
                         </Badge>
                       ) : null}
                     </div>
@@ -306,6 +317,16 @@ export function ClientListClient() {
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => void openEditDialog(client.id)}>
                               Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => deferMutation.mutate({ id: client.id, deferred: !client.deferred })}
+                              disabled={deferMutation.isPending}
+                            >
+                              {deferMutation.isPending && deferMutation.variables?.id === client.id
+                                ? "Saving..."
+                                : client.deferred
+                                  ? "Remove Deferred"
+                                  : "Set to Deferred"}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive"

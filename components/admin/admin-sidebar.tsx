@@ -62,8 +62,8 @@ const data = {
           url: "/admin/clients?status=inactive",
         },
         {
-          title: "Delinquent Clients",
-          url: "/admin/clients?status=delinquent",
+          title: "Deferred Clients",
+          url: "/admin/clients?status=deferred",
         },
         {
           title: LABELS.NEW_BORROWER,
