@@ -1,7 +1,7 @@
 # NRM Lending Architecture
 
-> Version: 2.0
-> Last updated: 2026-04-16
+> Version: 3.0
+> Last updated: 2026-08-14
 > Status: Active
 
 ---
@@ -14,9 +14,9 @@ The platform is split into three major route areas:
 
 - `/*` for public-facing pages
 - `/admin/*` for authenticated admin-only pages
-- `/client/*` for client-facing pages, with a mix of public and protected routes depending on feature needs
+- `/api/client/*` for the client self-service surface — **API routes only**, no page tree (see §6)
 
-This file supersedes earlier architecture assumptions that treated the app as admin-only with no public routes.
+This file supersedes earlier architecture assumptions that treated the app as admin-only with no public routes, and earlier versions of this file that described a planned `/client/*` page tree that was never built.
 
 ---
 
@@ -27,36 +27,33 @@ This file supersedes earlier architecture assumptions that treated the app as ad
 These are pages accessible without authentication.
 
 - `/` — landing page
+- `/apply` — public loan application intake
+- `/login` — staff login
 - future marketing or informational pages under `/*`
-- selected client entry pages under `/client/*` when a feature requires public access, such as login or onboarding
 
 ### Admin protected routes
 
 These routes are for internal staff and require authenticated admin access.
 
-- `/admin/dashboard`
-- `/admin/clients`
-- `/admin/clients/new`
-- `/admin/clients/[id]`
-- `/admin/loans`
-- `/admin/loans/new`
-- `/admin/loans/[id]`
-- `/admin/payments/new`
-- `/admin/investors`
-- `/admin/investors/[id]`
+- `/admin/dashboard`, `/admin/dashboard/activity`
+- `/admin/clients`, `/admin/clients/new`, `/admin/clients/[id]`
+- `/admin/loans`, `/admin/loans/new`, `/admin/loans/[id]`
+- `/admin/payments`, `/admin/payments/new`, `/admin/payments/summary`
+- `/admin/investors`, `/admin/investors/[id]`
+- `/admin/funding/add`, `/admin/funding/withdraw`
+- `/admin/applications`
 - `/admin/reports`
-- `/admin/settings/users`
+- `/admin/settings/profile`, `/admin/settings/users`
 
 ### Client routes
 
-Client routes live under `/client/*`.
+There is no client-facing page tree today. Client self-service is exposed as JSON API routes under `/api/client/*`:
 
-They may be:
+- `/api/client/dashboard`
+- `/api/client/loans`, `/api/client/loans/[id]`
+- `/api/client/payments`
 
-- public, such as `/client/login`
-- protected, such as `/client/dashboard`, `/client/loans`, or `/client/payments`
-
-Authentication and authorization for client routes must be handled separately from admin access. A client session must never be treated as an admin session.
+Authentication and authorization for client routes must be handled separately from admin access. A client session must never be treated as an admin session (`lib/api/auth-guard.ts`).
 
 ---
 
@@ -68,44 +65,24 @@ The route structure should clearly communicate who the page is for:
 
 - public pages for visitors and unauthenticated users
 - admin pages for internal operations
-- client pages for borrower self-service experiences
+- an API-only surface for client (borrower) self-service — see §6 for why there's no client page tree
 
 ### App Router only
 
 The application uses **Next.js App Router** exclusively.
 
-### Protected route groups
+### Route families
 
-Route groups should reflect the three route families:
+See §6 for the actual folder structure. At a high level:
 
-```text
-app/
-  (public)/
-    page.tsx
-  (auth)/
-    login/
-      page.tsx
-  admin/
-    dashboard/
-    clients/
-    loans/
-    payments/
-    investors/
-    reports/
-    settings/
-  client/
-    login/
-    dashboard/
-    loans/
-    payments/
-```
+- `app/` — public pages + `admin/` (staff pages) + `api/client/*` (client self-service API)
 
-Route groups are for organization only. Public URLs remain:
+Public URLs:
 
-- `/`
-- `/login` if global admin login is kept public
+- `/`, `/apply`
+- `/login` (staff)
 - `/admin/...`
-- `/client/...`
+- `/api/client/...`
 
 ---
 
@@ -155,94 +132,72 @@ If role-specific behavior is introduced later, use role checks in both:
 - middleware for coarse route protection
 - server actions for final authorization enforcement
 
-### Client pages
+### Client API routes
 
-Client pages may be either:
+`/api/client/*` routes may be either:
 
 - unauthenticated, for entry flows like login or verification
-- authenticated, for borrower dashboards and loan views
+- authenticated, for borrower dashboard/loan/payment data
 
 Client auth logic must be scoped so clients cannot access `/admin/*`.
 
 ---
 
-## 6. Recommended Folder Structure
+## 6. Actual Folder Structure
+
+The app is a single Next.js project at repo root — **not** an `apps/web/` monorepo package. Client-facing functionality is API-only (`app/api/client/*`); there is no `app/client/*` page tree. This supersedes the earlier target structure below §7.
 
 ```text
-apps/web/
-  app/
-    (public)/
-      page.tsx
-    login/
-      page.tsx
-    admin/
-      dashboard/
-        page.tsx
-      clients/
-        page.tsx
-        new/
-          page.tsx
-        [id]/
-          page.tsx
-      loans/
-        page.tsx
-        new/
-          page.tsx
-        [id]/
-          page.tsx
-      payments/
-        new/
-          page.tsx
-      investors/
-        page.tsx
-        [id]/
-          page.tsx
-      reports/
-        page.tsx
-      settings/
-        users/
-          page.tsx
-    client/
-      login/
-        page.tsx
-      dashboard/
-        page.tsx
-      loans/
-        page.tsx
-      payments/
-        page.tsx
-  components/
-    app/
-    ui/
-  lib/
-    auth/
-    db/
-    validations/
-  actions/
-  hooks/
-  middleware.ts
+app/
+  page.tsx                     public landing page
+  login/page.tsx                staff login
+  apply/page.tsx                 public loan application intake
+  admin/
+    dashboard/page.tsx
+    dashboard/activity/page.tsx
+    clients/page.tsx, new/, [id]/
+    loans/page.tsx, new/, [id]/
+    payments/page.tsx, new/, summary/
+    investors/page.tsx, [id]/
+    funding/add/, withdraw/
+    applications/page.tsx
+    reports/page.tsx
+    settings/profile/, users/
+  api/
+    auth/{login,logout,me,refresh}/route.ts
+    admin/{attachments,audit-logs,reports,settings,upload}/...
+    client/{dashboard,loans,payments}/route.ts   # client surface — API only, no pages
+components/
+  ui/                            shadcn primitives
+  <feature>/                     feature-specific components
+lib/
+  auth/                          session + password hashing
+  db/                            drizzle client + repositories
+  domain/                        pure calculation logic (loan-calculations, payment-events)
+  services/                      business logic coordination
+  actions/                       server actions, split admin/ and top-level
+  validations/                   zod schemas
+  api/                           route handler helpers (auth-guard, pagination, response, s3)
+  presentation/                  formatters, status display
+drizzle/                         schema + migrations
 ```
 
 ---
 
 ## 7. Current Implementation Status
 
-### Already aligned with this architecture
+For a per-feature breakdown of what's implemented, see `docs/features/README.md` — this section only tracks alignment with the route/folder model above.
 
-- public root page exists at `/`
-- admin placeholder routes exist under `/admin/*`
-- login page exists
-- the app uses Next.js App Router
-- the app uses a shared reusable placeholder component for initial scaffolding
+### Implemented
 
-### Still to be added for full alignment
+- Public (`/`, `/apply`), staff (`/login`, `/admin/*`), and client-API (`/api/client/*`) surfaces all exist and are role-separated
+- Client sessions cannot access `/admin/*` (`lib/api/auth-guard.ts`)
+- Full admin feature set: clients, loans, payments, investors, funding, applications, reports, settings/users, audit logs
+- Domain/service/validation layering as described in §4
 
-- `/client/*` route scaffolding
-- middleware-based protection for admin and protected client pages
-- Auth.js integration
-- role separation between admin and client sessions
-- domain actions, database layer, and validations
-- route-group layouts for admin shell and future client shell
+### Deliberately not built
+
+- `app/client/*` UI pages (borrower-facing web UI beyond the API surface) — client self-service today is API-only; a dedicated client UI is a future scope decision, not an oversight. Log a decision in `DECISIONS.md` before building it, since it changes the route model in §2.
 
 ---
 
@@ -273,29 +228,16 @@ Expected future public pages:
 - FAQs
 - public application or lead capture pages
 
-Expected future client protected pages:
-
-- `/client/dashboard`
-- `/client/loans`
-- `/client/loans/[id]`
-- `/client/payments`
-- `/client/profile`
-
-Expected future admin additions:
-
-- audit logs
-- payment history views
-- report detail screens
-- investor returns views
+A dedicated borrower-facing web UI (as opposed to the current `/api/client/*` API surface) is a candidate future addition, not committed work — see §7.
 
 ---
 
 ## 10. Decision Summary
 
-The canonical route model for the project is now:
+The canonical route model for the project is:
 
 - `/*` for public pages
-- `/admin/*` for admin protected pages
-- `/client/*` for client pages, with both open and protected flows
+- `/admin/*` for admin-protected pages
+- `/api/client/*` for the client self-service surface (API only, no page tree today)
 
 All future implementation decisions should align to this structure unless this document is revised again.

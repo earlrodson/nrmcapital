@@ -125,6 +125,23 @@ export async function deactivateClient(id: string) {
   })
 }
 
+export async function setClientDeferred(id: string, deferred: boolean) {
+  return withActionError(async () => {
+    const user = await requireActionRole(["ADMIN", "SUPERADMIN"])
+    const row = await adminRepository.setClientDeferred(id, deferred, user.userId)
+    if (!row) throw new Error("NOT_FOUND: Client not found.")
+
+    await adminRepository.createAuditLog({
+      userId: user.userId,
+      action: deferred ? "SET_DEFERRED" : "REMOVE_DEFERRED",
+      entity: "CLIENT",
+      entityId: row.id,
+      payload: { deferred: row.deferred, deferredSetAt: row.deferredSetAt },
+    })
+    return row
+  })
+}
+
 export async function listClientLoans(clientId: string) {
   return withActionError(async () => {
     await requireActionRole(["ADMIN", "SUPERADMIN"])

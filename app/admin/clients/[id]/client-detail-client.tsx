@@ -46,6 +46,7 @@ interface ClientData {
   idType: string | null
   idNumber: string | null
   isActive: boolean
+  deferred?: boolean | null
   createdAt: string | Date
 }
 
@@ -329,6 +330,9 @@ export function ClientDetailClient({ clientId }: ClientDetailProps) {
             <Badge variant={client.isActive ? "default" : "secondary"}>
               {client.isActive ? "Active Account" : "Inactive"}
             </Badge>
+            {client.isActive && client.deferred ? (
+              <Badge variant="destructive">Deferred</Badge>
+            ) : null}
           </div>
           <p className="text-muted-foreground flex items-center gap-2">
             <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">ID: {client.id}</span>

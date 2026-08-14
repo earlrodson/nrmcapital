@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { listClients, deactivateClient, getClientById, updateClient } from "@/lib/actions/admin/clients"
+import { listClients, deactivateClient, getClientById, updateClient, setClientDeferred } from "@/lib/actions/admin/clients"
 
 type ClientRow = {
   id: string
@@ -40,6 +40,7 @@ type ClientRow = {
   idType?: string | null
   idNumber?: string | null
   isActive: boolean
+  deferred?: boolean | null
   createdAt: Date | string
 }
 
@@ -59,6 +60,7 @@ export function ClientListClient() {
   const [debouncedSearch, setDebouncedSearch] = React.useState("")
   
   const [pendingDeactivateClient, setPendingDeactivateClient] = React.useState<ClientRow | null>(null)
+  const [pendingDeferClient, setPendingDeferClient] = React.useState<ClientRow | null>(null)
   const [editingClientId, setEditingClientId] = React.useState<string | null>(null)
   
   const [editError, setEditError] = React.useState<string | null>(null)
@@ -73,7 +75,7 @@ export function ClientListClient() {
 
   const status = React.useMemo(() => {
     const value = searchParams.get("status")
-    if (value === "active" || value === "inactive") {
+    if (value === "active" || value === "inactive" || value === "deferred") {
       return value
     }
     return null
@@ -112,6 +114,18 @@ export function ClientListClient() {
     }
   })
 
+  const deferMutation = useMutation({
+    mutationFn: async ({ id, deferred }: { id: string; deferred: boolean }) => {
+      const res = await setClientDeferred(id, deferred)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "clients"] })
+      setPendingDeferClient(null)
+    }
+  })
+
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: ClientUpdateInput }) => {
       const res = await updateClient(id, data)
@@ -141,6 +155,10 @@ export function ClientListClient() {
   function handleDeactivate(client: ClientRow) {
     if (!client.isActive) return
     deactivateMutation.mutate(client.id)
+  }
+
+  function handleToggleDefer(client: ClientRow) {
+    deferMutation.mutate({ id: client.id, deferred: !client.deferred })
   }
 
   function handleSaveEdit() {
@@ -268,9 +286,16 @@ export function ClientListClient() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={client.isActive ? "default" : "secondary"} className="text-[10px] h-5">
-                      {client.isActive ? "Active" : "Inactive"}
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant={client.isActive ? "default" : "secondary"} className="text-[10px] h-5">
+                        {client.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {client.isActive && client.deferred ? (
+                        <Badge variant="destructive" className="text-[10px] h-5">
+                          Deferred
+                        </Badge>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {new Date(client.createdAt).toLocaleDateString()}
@@ -298,6 +323,16 @@ export function ClientListClient() {
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => void openEditDialog(client.id)}>
                               Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setPendingDeferClient(client)}
+                              disabled={deferMutation.isPending}
+                            >
+                              {deferMutation.isPending && deferMutation.variables?.id === client.id
+                                ? "Saving..."
+                                : client.deferred
+                                  ? "Remove Deferred"
+                                  : "Set to Deferred"}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive"
@@ -349,6 +384,50 @@ export function ClientListClient() {
               disabled={!pendingDeactivateClient || deactivateMutation.isPending}
             >
               {deactivateMutation.isPending ? "Deactivating..." : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingDeferClient)}
+        onOpenChange={(open) => {
+          if (!open && !deferMutation.isPending) {
+            setPendingDeferClient(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {pendingDeferClient?.deferred ? "Remove deferred status?" : "Set borrower to deferred?"}
+            </DialogTitle>
+            <DialogDescription>
+              {pendingDeferClient
+                ? pendingDeferClient.deferred
+                  ? `This will remove the deferred status from ${pendingDeferClient.firstName} ${pendingDeferClient.lastName} and return them to the active client list.`
+                  : `This will mark ${pendingDeferClient.firstName} ${pendingDeferClient.lastName} as deferred.`
+                : "This will change the borrower's deferred status."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDeferClient(null)}
+              disabled={deferMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={pendingDeferClient?.deferred ? "default" : "destructive"}
+              onClick={() => pendingDeferClient && handleToggleDefer(pendingDeferClient)}
+              disabled={!pendingDeferClient || deferMutation.isPending}
+            >
+              {deferMutation.isPending
+                ? "Saving..."
+                : pendingDeferClient?.deferred
+                  ? "Remove Deferred"
+                  : "Set to Deferred"}
             </Button>
           </DialogFooter>
         </DialogContent>
