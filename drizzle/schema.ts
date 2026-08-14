@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm"
 import {
   boolean,
   decimal,
@@ -37,6 +38,7 @@ export const users = pgTable(
     name: text("name").notNull(),
     role: roleEnum("role").notNull().default("ADMIN"),
     isActive: boolean("is_active").notNull().default(true),
+    isRestricted: boolean("is_restricted").notNull().default(false),
     lastLoginAt: timestamp("last_login_at", { mode: "date", precision: 3 }),
     createdAt: timestamp("created_at", { mode: "date", precision: 3 }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date", precision: 3 }).notNull(),
@@ -49,6 +51,9 @@ export const clients = pgTable(
   {
     id: text("id").primaryKey(),
     userId: text("user_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+    clientNumber: text("client_number")
+      .notNull()
+      .default(sql`('CL-' || lpad(nextval('client_number_seq')::text, 4, '0'))`),
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
     contactNumber: text("contact_number"),
@@ -67,6 +72,7 @@ export const clients = pgTable(
   },
   (table) => [
     uniqueIndex("clients_user_id_key").on(table.userId),
+    uniqueIndex("clients_client_number_key").on(table.clientNumber),
     index("clients_is_active_created_at_idx").on(table.isActive, table.createdAt),
   ],
 )
@@ -275,6 +281,20 @@ export const systemSettings = pgTable(
     updatedById: text("updated_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
   },
   (table) => [uniqueIndex("system_settings_setting_key_key").on(table.settingKey)],
+)
+
+export const loginThrottles = pgTable(
+  "login_throttles",
+  {
+    id: text("id").primaryKey(),
+    scope: text("scope").notNull(),
+    key: text("key").notNull(),
+    failCount: integer("fail_count").notNull().default(0),
+    windowStart: timestamp("window_start", { mode: "date", precision: 3 }).notNull(),
+    lockedUntil: timestamp("locked_until", { mode: "date", precision: 3 }),
+    updatedAt: timestamp("updated_at", { mode: "date", precision: 3 }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("login_throttles_scope_key_key").on(table.scope, table.key)],
 )
 
 export const auditLogs = pgTable(

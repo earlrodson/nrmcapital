@@ -2,6 +2,7 @@
 
 import { adminRepository } from "@/lib/db/repositories/admin.repository"
 import { requireActionRole, withActionError } from "@/lib/actions/utils"
+import { provisionClientPortalAccount, resetClientPortalPassword } from "@/lib/services/client-portal-provisioning"
 import {
   createClientAttachmentSchema,
   createClientAttachmentsBatchSchema,
@@ -139,6 +140,40 @@ export async function setClientDeferred(id: string, deferred: boolean) {
       payload: { deferred: row.deferred, deferredSetAt: row.deferredSetAt },
     })
     return row
+  })
+}
+
+export async function createClientPortalAccess(clientId: string) {
+  return withActionError(async () => {
+    const user = await requireActionRole(["ADMIN", "SUPERADMIN"])
+    const result = await provisionClientPortalAccount(clientId)
+
+    await adminRepository.createAuditLog({
+      userId: user.userId,
+      action: "CREATE_PORTAL_ACCESS",
+      entity: "CLIENT",
+      entityId: clientId,
+      payload: { userId: result.userId },
+    })
+
+    return result
+  })
+}
+
+export async function resetClientPortalAccessPassword(clientId: string) {
+  return withActionError(async () => {
+    const user = await requireActionRole(["ADMIN", "SUPERADMIN"])
+    const result = await resetClientPortalPassword(clientId)
+
+    await adminRepository.createAuditLog({
+      userId: user.userId,
+      action: "RESET_PORTAL_PASSWORD",
+      entity: "CLIENT",
+      entityId: clientId,
+      payload: { userId: result.userId },
+    })
+
+    return result
   })
 }
 

@@ -63,6 +63,7 @@ export async function getUserById(id: string) {
       email: row.email,
       role: row.role,
       isActive: row.isActive,
+      isRestricted: row.isRestricted,
       name: row.name,
       lastLoginAt: row.lastLoginAt,
       createdAt: row.createdAt,
@@ -80,6 +81,7 @@ export async function updateUser(id: string, input: z.infer<typeof updateUserSch
       name: data.name,
       role: data.role,
       isActive: data.isActive,
+      isRestricted: data.isRestricted,
     })
     if (!row) throw new Error("NOT_FOUND: User not found.")
 
@@ -96,6 +98,7 @@ export async function updateUser(id: string, input: z.infer<typeof updateUserSch
       email: row.email,
       role: row.role,
       isActive: row.isActive,
+      isRestricted: row.isRestricted,
       name: row.name,
     }
   })

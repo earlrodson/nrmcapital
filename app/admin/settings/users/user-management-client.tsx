@@ -1,16 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { 
-  Plus, 
-  MoreHorizontal, 
-  Pencil, 
-  Key, 
-  CheckCircle2, 
+import {
+  Plus,
+  MoreHorizontal,
+  Pencil,
+  Key,
+  CheckCircle2,
   XCircle,
   Loader2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShieldAlert,
+  ShieldCheck
 } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
@@ -57,6 +59,7 @@ interface User {
   name: string
   role: "SUPERADMIN" | "ADMIN" | "CLIENT"
   isActive: boolean
+  isRestricted: boolean
 }
 
 interface Pagination {
@@ -110,7 +113,10 @@ export function UserManagementClient() {
   })
 
   const updateUserMutation = useMutation({
-    mutationFn: async (input: { id: string; data: { name: string; role: User["role"]; isActive?: boolean } }) => {
+    mutationFn: async (input: {
+      id: string
+      data: { name: string; role: User["role"]; isActive?: boolean; isRestricted?: boolean }
+    }) => {
       const res = await updateUser(input.id, input.data)
       if (!res.success) throw new Error(res.error)
       return res.data
@@ -174,6 +180,21 @@ export function UserManagementClient() {
       })
     } catch {
       alert("An error occurred while updating status")
+    }
+  }
+
+  const handleToggleRestriction = async (user: User) => {
+    try {
+      await updateUserMutation.mutateAsync({
+        id: user.id,
+        data: {
+          isRestricted: !user.isRestricted,
+          name: user.name,
+          role: user.role,
+        },
+      })
+    } catch {
+      alert("An error occurred while updating restriction")
     }
   }
 
@@ -349,17 +370,25 @@ export function UserManagementClient() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {user.isActive ? (
-                      <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span className="text-xs font-medium">Active</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <XCircle className="h-4 w-4" />
-                        <span className="text-xs font-medium">Inactive</span>
-                      </div>
-                    )}
+                    <div className="flex flex-col gap-1">
+                      {user.isActive ? (
+                        <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-xs font-medium">Active</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <XCircle className="h-4 w-4" />
+                          <span className="text-xs font-medium">Inactive</span>
+                        </div>
+                      )}
+                      {user.isRestricted && (
+                        <div className="flex items-center gap-1.5 text-destructive">
+                          <ShieldAlert className="h-4 w-4" />
+                          <span className="text-xs font-medium">Restricted (login blocked)</span>
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
@@ -388,6 +417,19 @@ export function UserManagementClient() {
                               <>
                                 <CheckCircle2 className="mr-2 h-4 w-4" />
                                 Activate
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleToggleRestriction(user)}>
+                            {user.isRestricted ? (
+                              <>
+                                <ShieldCheck className="mr-2 h-4 w-4" />
+                                Remove Restriction
+                              </>
+                            ) : (
+                              <>
+                                <ShieldAlert className="mr-2 h-4 w-4" />
+                                Restrict (block login)
                               </>
                             )}
                           </DropdownMenuItem>
