@@ -6,7 +6,7 @@ import { db } from "@/lib/db/client"
 import { users } from "@/drizzle/schema"
 import { eq } from "drizzle-orm"
 
-const SESSION_COOKIE = "nrm_session"
+export const SESSION_COOKIE = "nrm_session"
 const ONE_DAY_SECONDS = 60 * 60 * 24
 const SESSION_TTL_SECONDS = ONE_DAY_SECONDS * 7
 
@@ -110,9 +110,7 @@ export async function destroySession() {
   cookieStore.set(SESSION_COOKIE, "", { maxAge: 0, path: "/" })
 }
 
-export async function getSessionUser(): Promise<SessionUser | null> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get(SESSION_COOKIE)?.value
+export async function getSessionUserFromToken(token: string | undefined): Promise<SessionUser | null> {
   if (!token) {
     return null
   }
@@ -129,12 +127,26 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       email: users.email,
       name: users.name,
       isActive: users.isActive,
+      isRestricted: users.isRestricted,
     })
     .from(users)
     .where(eq(users.id, payload.userId))
     .limit(1)
 
-  if (!user || !user.isActive) {
+  if (!user) {
+    return null
+  }
+  // isRestricted is an absolute lockout: unlike isActive (which CLIENT accounts bypass
+  // for read-only history access), a restricted user can never authenticate, regardless
+  // of role or active status. This is the "even active" hard-block admins can flip on.
+  if (user.isRestricted) {
+    return null
+  }
+  // Deactivated CLIENT accounts keep read-only portal access so borrowers can still
+  // view their loan/payment history after being marked inactive/deferred — the client
+  // portal has no write surface, so this doesn't reopen any mutation capability.
+  // Deactivated staff (ADMIN/SUPERADMIN) remain fully locked out.
+  if (!user.isActive && user.role !== "CLIENT") {
     return null
   }
 
@@ -144,4 +156,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     email: user.email,
     name: user.name,
   }
+}
+
+export async function getSessionUser(): Promise<SessionUser | null> {
+  const cookieStore = await cookies()
+  return getSessionUserFromToken(cookieStore.get(SESSION_COOKIE)?.value)
 }

@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# one-off script output — may contain plaintext client credentials
+/tools/output/
