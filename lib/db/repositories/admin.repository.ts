@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { and, asc, count, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, getTableColumns, ilike, isNull, or, sql } from "drizzle-orm"
 
 import {
   attachments,
@@ -72,6 +72,7 @@ export class AdminRepository {
     }
     if (input.status === "active") {
       clauses.push(eq(clients.isActive, true))
+      clauses.push(or(isNull(clients.deferred), eq(clients.deferred, false)))
     }
     if (input.status === "inactive") {
       clauses.push(eq(clients.isActive, false))
