@@ -75,8 +75,8 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Push DB schema
-        run: pnpm run db:push
+      - name: Run DB migrations
+        run: pnpm run db:migrate
 
       - name: Seed admin user
         run: node ./scripts/seed-admin.mjs
